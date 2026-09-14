@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `NetworkSession.set_proxy_settings` honors `CUSTOM` / `NONE` / `DEFAULT` via Chromium `--proxy-server` / `--no-proxy-server` at environment create ([bug](docs/bugs/done/2026-09-10-network-session-set-proxy-settings-stub.md), [plan 5.0](docs/plans/done/5.0-network-session-proxy.md)).
 - `examples/add-cookie --smoke-proxy` checks CUSTOM to a closed port fails closed.
 
+### Fixed
+
+- `webview2gtk-1.vapi` declares `NetworkSession()` so demos/apps can construct sessions (`--smoke-persist` failed on release CI without it).
+
 ### Changed
 
 - README: **Limitations vs WebKitGTK** section (proxy is create-time / process-wide — not a live mid-session switch like WebKitGTK).

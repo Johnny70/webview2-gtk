@@ -86,6 +86,7 @@ namespace WebView2Gtk {
 	}
 
 	public class NetworkSession : GLib.Object {
+		public NetworkSession();
 		public signal void download_started(Download download);
 		public CookieManager get_cookie_manager();
 		public void set_proxy_settings(NetworkProxyMode mode, NetworkProxySettings? settings);
