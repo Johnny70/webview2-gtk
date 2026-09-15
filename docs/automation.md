@@ -80,29 +80,31 @@ Set **before** the WebView2 environment is created (before first present/attach)
 
 ### HTTP(S) proxy (`NetworkSession.set_proxy_settings`)
 
-Same create-time latch as webdriver / autoplay. Typical consumer pattern: one
-browser window at a time; point `CUSTOM` at a **local** forwarding proxy for the
-life of that window; the local proxy routes by request host (ChatGPT → CA, etc.).
-Chromium applies the flag to **all** HTTP(S) from that environment (main frame,
-subresources, XHR) — not only the top-level navigation host.
+First `CUSTOM` **before** the first WebView is shown starts the library loopback
+hop. Later calls store a route on that `NetworkSession` and post it to the hop
+thread when the view is bound (live; no env recreate).
 
 ```vala
-web_view.network_session.set_proxy_settings(
+/* Before any window — start hop, pass-through */
+session.set_proxy_settings(
 	NetworkProxyMode.CUSTOM,
-	new NetworkProxySettings("http://127.0.0.1:8888", null)
+	new NetworkProxySettings("http://127.0.0.1", null)
 );
-/* then present / load_uri — before first WebView2 env create */
+/* After a view exists — relay that view only */
+web.network_session.set_proxy_settings(
+	NetworkProxyMode.CUSTOM,
+	new NetworkProxySettings("http://upstream.example:8080", null)
+);
 ```
 
-| Mode | Chromium arg |
-|------|----------------|
-| `CUSTOM` | `--proxy-server=<uri>` |
-| `NONE` | `--no-proxy-server` |
-| `DEFAULT` | omit (system default) |
+| CUSTOM URI | Hop |
+|------------|-----|
+| `http://127.0.0.1` (optional `:port`) | Pass-through (DIRECT) |
+| Other host | Relay that session through the URI |
 
-Late calls after env create warn and do not retarget a live environment. Closing
-the window and creating a new one (new process env after last host release, or a
-fresh process) is how you switch proxy for the next browser session.
+`CUSTOM` after a shared environment already exists errors. Never calling
+`CUSTOM` keeps one shared environment (no listen thread). Staging / pacman /
+setup.exe all include the hop — no extra meson option.
 
 Smoke:
 
@@ -110,7 +112,7 @@ Smoke:
 & 'C:\msys64\tmp\webview2-gtk\portable-demos\webview2gtk-add-cookie.exe' --smoke-proxy
 ```
 
-Pass: `TEST_PASS` (CUSTOM to a closed local port fails closed — no “Example Domain”).
+Pass: `TEST_PASS` (CUSTOM to `http://192.0.2.1:1` fails closed — no “Example Domain”).
 
 ## Demo and smokes
 

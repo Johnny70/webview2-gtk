@@ -23,6 +23,8 @@ struct WebView2Host {
 	RECT bounds;
 	ICoreWebView2Controller *controller;
 	ICoreWebView2 *webview;
+	ICoreWebView2Environment *env;
+	int route_id;
 	BOOL ready;
 	BOOL host_visible;
 

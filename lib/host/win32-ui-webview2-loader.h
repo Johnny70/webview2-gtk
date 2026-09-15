@@ -15,6 +15,9 @@ BOOL vala_webview2_loader_init (void);
 /* Async; handler must stay alive until Invoke runs. */
 HRESULT vala_webview2_loader_create_environment (
 	struct ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler *handler);
+HRESULT vala_webview2_loader_create_environment_for_host (
+	int route_id,
+	struct ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler *handler);
 
 #ifdef __cplusplus
 }

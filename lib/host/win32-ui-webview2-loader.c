@@ -5,10 +5,12 @@
 #include <windows.h>
 #include <objbase.h>
 #include <stdio.h>
+#include <wchar.h>
 
 #include "win32-ui-webview2-loader.h"
 #include "win32-ui-webview2-automation.h"
 #include "win32-ui-webview2-sdk.h"
+#include <shlobj.h>
 
 typedef HRESULT (STDMETHODCALLTYPE *PFN_CreateCoreWebView2EnvironmentWithOptions)(
 	PCWSTR browserExecutableFolder,
@@ -68,6 +70,53 @@ HRESULT vala_webview2_loader_create_environment (
 	/* Honor WEBKIT_INSPECTOR_SERVER / autoplay DENY / webdriver DISABLED / proxy → AdditionalBrowserArguments. */
 	options = vala_webview2_host_create_environment_options ();
 	hr = g_create_env_with_options (NULL, NULL, options, handler);
+	if (options != NULL) {
+		ICoreWebView2EnvironmentOptions_Release (options);
+	}
+	return hr;
+}
+
+static BOOL
+make_host_user_data_folder (int route_id, wchar_t *out, size_t out_cch)
+{
+	wchar_t base[MAX_PATH];
+	DWORD n;
+
+	if (out == NULL || out_cch < 8 || route_id <= 0) {
+		return FALSE;
+	}
+	n = GetEnvironmentVariableW (L"LOCALAPPDATA", base, MAX_PATH);
+	if (n == 0 || n >= MAX_PATH) {
+		return FALSE;
+	}
+	_snwprintf (out, out_cch, L"%s\\webview2gtk\\profiles\\wv_%d", base, route_id);
+	out[out_cch - 1] = L'\0';
+	if (SHCreateDirectoryExW (NULL, out, NULL) != ERROR_SUCCESS
+	    && GetLastError () != ERROR_ALREADY_EXISTS
+	    && GetLastError () != ERROR_FILE_EXISTS) {
+		/* Parent missing — try again after creating webview2gtk\profiles. */
+		SHCreateDirectoryExW (NULL, out, NULL);
+	}
+	return TRUE;
+}
+
+HRESULT vala_webview2_loader_create_environment_for_host (
+	int route_id,
+	struct ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler *handler)
+{
+	ICoreWebView2EnvironmentOptions *options = NULL;
+	wchar_t folder[MAX_PATH];
+	HRESULT hr;
+
+	if (g_create_env_with_options == NULL || handler == NULL || route_id <= 0) {
+		return E_FAIL;
+	}
+	if (!make_host_user_data_folder (route_id, folder, MAX_PATH)) {
+		fprintf (stderr, "webview2gtk: hop UserDataFolder failed for wv_%d\n", route_id);
+		return E_FAIL;
+	}
+	options = vala_webview2_host_create_environment_options_for_route (route_id);
+	hr = g_create_env_with_options (NULL, folder, options, handler);
 	if (options != NULL) {
 		ICoreWebView2EnvironmentOptions_Release (options);
 	}

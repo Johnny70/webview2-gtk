@@ -1,6 +1,6 @@
 # Bug — `NetworkSession.set_proxy_settings` is a no-op stub
 
-**Status:** ✅ fixed in **0.5.13** (`--proxy-server` / `--no-proxy-server` at env create)  
+**Status:** ✅ fixed in **0.5.13**, shipped in **0.6.0** (`--proxy-server` / `--no-proxy-server` at env create; 6.0 hop supersedes the process-wide latch)  
 **Date:** 2026-09-10  
 **Component:** `lib/webview2gtk/NetworkSession.vala` (+ host env options)  
 **Related:** `NetworkProxyMode` / `NetworkProxySettings`; `AdditionalBrowserArguments` merge in `win32-ui-webview2-automation.c`  

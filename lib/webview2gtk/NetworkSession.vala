@@ -4,6 +4,12 @@ extern void wv2_host_set_proxy_settings(int mode, string? proxy_uri);
 [CCode(cheader_filename = "webview2gtk-host-api.h", cname = "vala_webview2_host_environment_created")]
 extern bool wv2_host_environment_created();
 
+[CCode(cheader_filename = "webview2gtk-host-api.h", cname = "vala_webview2_host_embedded_proxy_active")]
+extern bool wv2_host_embedded_proxy_active();
+
+[CCode(cheader_filename = "webview2gtk-host-api.h", cname = "vala_webview2_host_get_route_id")]
+extern int wv2_host_get_route_id(void* host);
+
 namespace WebView2Gtk {
 
 internal class PendingCookie {
@@ -47,7 +53,7 @@ public class NetworkSession : Object {
 	private bool ephemeral = false;
 	private NetworkProxyMode proxy_mode = NetworkProxyMode.DEFAULT;
 	private NetworkProxySettings? proxy_settings = null;
-	private bool proxy_late_warned = false;
+	private int proxy_route_id = 0;
 
 	public signal void download_started(Download download);
 
@@ -278,41 +284,52 @@ public class NetworkSession : Object {
 	/**
 	 * WebKitGTK-shaped — set HTTP(S) proxy for this session.
 	 *
-	 * On Windows, Chromium honors ''--proxy-server'' / ''--no-proxy-server'' only at
-	 * WebView2 environment create (process-wide shared env). Call before the first
-	 * WebView attaches. Late calls warn once and are stored for a future recreate;
-	 * they do not retarget a live environment. All HTTP(S) from that env (main
-	 * frame, subresources, XHR) use the latch — a local forwarding proxy can route
-	 * by request host.
+	 * On Windows, the first ''CUSTOM'' before any WebView is shown starts the
+	 * library loopback hop and every later view’s environment points at it
+	 * (''http://id@127.0.0.1:port''). Loopback / dummy URIs are pass-through.
+	 * A non-loopback URI is a live relay for this session. ''CUSTOM'' after a
+	 * shared (non-hop) environment already exists is an error.
 	 */
 	public void set_proxy_settings(
 		NetworkProxyMode mode,
 		NetworkProxySettings? settings
 	) {
+		if (mode == NetworkProxyMode.CUSTOM && !EmbeddedProxy.ensure()) {
+			warning(
+				"WebView2Gtk: set_proxy_settings(CUSTOM) requires enabling the library proxy before the first WebView attaches"
+			);
+			return;
+		}
+		if (mode != NetworkProxyMode.CUSTOM && !wv2_host_embedded_proxy_active()) {
+			wv2_host_set_proxy_settings((int) mode, null);
+			return;
+		}
+
 		this.proxy_mode = mode;
 		this.proxy_settings = (mode == NetworkProxyMode.CUSTOM) ? settings : null;
 
-		string? uri = null;
-		if (mode == NetworkProxyMode.CUSTOM) {
-			if (settings == null) {
-				warning("WebView2Gtk: set_proxy_settings CUSTOM requires NetworkProxySettings");
-				mode = NetworkProxyMode.DEFAULT;
-				this.proxy_mode = mode;
-			} else if (settings.http_proxy_uri != null && settings.http_proxy_uri.length > 0) {
-				uri = settings.http_proxy_uri;
-			} else {
-				uri = settings.default_proxy_uri;
-			}
+		if (mode != NetworkProxyMode.CUSTOM) {
+			EmbeddedProxy.set_upstream(this.proxy_route_id, "");
+			return;
+		}
+		if (settings == null) {
+			warning("WebView2Gtk: set_proxy_settings CUSTOM requires NetworkProxySettings");
+			this.proxy_mode = NetworkProxyMode.DEFAULT;
+			this.proxy_settings = null;
+			EmbeddedProxy.set_upstream(this.proxy_route_id, "");
+			return;
 		}
 
-		if (wv2_host_environment_created() && !this.proxy_late_warned) {
-			this.proxy_late_warned = true;
-			warning(
-				"WebView2Gtk: set_proxy_settings after env create — stored only; restart required for Chromium proxy flags"
-			);
+		string uri = settings.default_proxy_uri;
+		if (settings.http_proxy_uri != null && settings.http_proxy_uri.length > 0) {
+			uri = settings.http_proxy_uri;
 		}
-
-		wv2_host_set_proxy_settings((int) mode, uri);
+		/* Dummy pass-through is http://127.0.0.1 (optional :port). */
+		if (uri == null || uri.length == 0 || uri.down().has_prefix("http://127.0.0.1")) {
+			EmbeddedProxy.set_upstream(this.proxy_route_id, "");
+			return;
+		}
+		EmbeddedProxy.set_upstream(this.proxy_route_id, uri);
 	}
 
 	public void set_tls_errors_policy(TLSErrorsPolicy policy) {
@@ -324,6 +341,21 @@ public class NetworkSession : Object {
 			return;
 		}
 		this.cookie_host = host;
+		this.proxy_route_id = wv2_host_get_route_id(host);
+		if (this.proxy_mode == NetworkProxyMode.CUSTOM && this.proxy_settings != null) {
+			string uri = this.proxy_settings.default_proxy_uri;
+			if (this.proxy_settings.http_proxy_uri != null
+			    && this.proxy_settings.http_proxy_uri.length > 0) {
+				uri = this.proxy_settings.http_proxy_uri;
+			}
+			if (uri == null || uri.length == 0 || uri.down().has_prefix("http://127.0.0.1")) {
+				EmbeddedProxy.set_upstream(this.proxy_route_id, "");
+			} else {
+				EmbeddedProxy.set_upstream(this.proxy_route_id, uri);
+			}
+		} else if (wv2_host_embedded_proxy_active()) {
+			EmbeddedProxy.set_upstream(this.proxy_route_id, "");
+		}
 		wv2_host_set_cookie_apply(host, NetworkSession.on_apply_pending_cookies, this);
 		wv2_host_set_download_handlers(host, NetworkSession.on_host_started,
 			NetworkSession.on_host_progress, NetworkSession.on_host_finished,
@@ -339,6 +371,10 @@ public class NetworkSession : Object {
 		wv2_host_set_cookie_apply(host, null, null);
 		wv2_host_set_download_handlers(host, null, null, null, null, null);
 		if (this.cookie_host == host) {
+			if (this.proxy_route_id > 0) {
+				EmbeddedProxy.set_upstream(this.proxy_route_id, null);
+				this.proxy_route_id = 0;
+			}
 			this.fail_pending_cookies();
 			if (this.active_replace != null && !this.active_replace.done) {
 				this.active_replace.ok = false;

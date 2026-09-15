@@ -82,6 +82,7 @@ CAPTURE_VALA=(
 	lib/webview2gtk/ResponsePolicyDecision.vala
 	lib/webview2gtk/WebResource.vala
 	lib/webview2gtk/Download.vala
+	lib/webview2gtk/EmbeddedProxy.vala
 	lib/webview2gtk/NetworkSession.vala
 	lib/webview2gtk/ApplicationInfo.vala
 	lib/webview2gtk/AutomationSession.vala
@@ -150,6 +151,7 @@ host_c_files() {
 		"${HOST}/win32-ui-webview2-loader.c" \
 		"${HOST}/win32-ui-webview2-com-glue.c" \
 		"${HOST}/win32-ui-webview2-automation.c" \
+		"${HOST}/win32-ui-webview2-proxy.c" \
 		"${HOST}/win32-ui-webview2-script.c" \
 		"${HOST}/win32-ui-webview2-capture.c" \
 		"${HOST}/win32-ui-webview2-print.c" \

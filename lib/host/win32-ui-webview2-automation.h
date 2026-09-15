@@ -22,21 +22,24 @@ void vala_webview2_host_set_autoplay_policy (int policy);
 /* 0=AUTO, 1=ENABLED, 2=DISABLED — match NavigatorWebDriverActivePolicy */
 void vala_webview2_host_set_navigator_webdriver_policy (int policy);
 
-/* 0=DEFAULT, 1=CUSTOM, 2=NONE — match NetworkProxyMode */
+/* 0=DEFAULT, 1=CUSTOM, 2=NONE — match NetworkProxyMode (hop-off NONE only). */
 void vala_webview2_host_set_proxy_settings (int mode, const char *proxy_uri_utf8);
 
-/* True after the process-wide WebView2 environment exists. */
+/* True after any WebView2 environment exists (shared or per-view hop). */
 bool vala_webview2_host_environment_created (void);
 
 /*
  * Build ICoreWebView2EnvironmentOptions when WEBKIT_INSPECTOR_SERVER is set,
  * autoplay DENY needs --autoplay-policy=, navigator webdriver DISABLED needs
- * --disable-blink-features=AutomationControlled, and/or proxy CUSTOM/NONE
- * needs --proxy-server= / --no-proxy-server. Caller must Release.
+ * --disable-blink-features=AutomationControlled, hop-off NONE needs
+ * --no-proxy-server, and/or hop-on route_id needs --proxy-server=http://id@….
+ * route_id 0 = shared env. Caller must Release.
  * Returns NULL when no additional browser args are needed.
  */
 struct ICoreWebView2EnvironmentOptions *
 vala_webview2_host_create_environment_options (void);
+struct ICoreWebView2EnvironmentOptions *
+vala_webview2_host_create_environment_options_for_route (int route_id);
 
 #ifdef __cplusplus
 }

@@ -44,6 +44,8 @@ HWND vala_webview2_com_get_parent_hwnd (void);
 HWND vala_webview2_com_get_parent_hwnd_for (WebView2Host *host);
 struct ICoreWebView2Controller *vala_webview2_com_get_controller_for (WebView2Host *host);
 struct ICoreWebView2Environment *vala_webview2_com_get_environment (void);
+bool vala_webview2_com_has_any_environment (void);
+int vala_webview2_host_get_route_id (WebView2Host *host);
 
 void vala_webview2_com_pump_messages (void);
 void vala_webview2_com_sync_await (volatile LONG *done);

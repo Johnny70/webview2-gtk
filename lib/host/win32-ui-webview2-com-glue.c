@@ -10,6 +10,7 @@
 #include "win32-ui-webview2-com-glue.h"
 #include "win32-ui-webview2-host-priv.h"
 #include "win32-ui-webview2-loader.h"
+#include "win32-ui-webview2-proxy.h"
 #include "win32-ui-webview2-sdk.h"
 #include "webview2gtk-host-api.h"
 
@@ -27,6 +28,8 @@ static LONG g_env_creating;
 static WebView2Host *g_env_waiters[8];
 static int g_env_waiter_count;
 static WebView2Host *g_last_host;
+static LONG g_hop_env_count;
+static LONG g_next_route_id;
 
 static void
 ensure_parent_clip_styles (HWND parent)
@@ -72,6 +75,7 @@ typedef struct EnvCompletedHandler {
 	ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler iface;
 	ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandlerVtbl vtbl;
 	LONG ref_count;
+	WebView2Host *host;
 } EnvCompletedHandler;
 
 typedef struct ControllerCompletedHandler {
@@ -205,7 +209,13 @@ create_controller_for_host (WebView2Host *host)
 	ControllerCompletedHandler *controller_handler;
 	HRESULT hr;
 
-	if (host == NULL || g_env == NULL) {
+	ICoreWebView2Environment *env;
+
+	if (host == NULL) {
+		return FALSE;
+	}
+	env = host->env != NULL ? host->env : g_env;
+	if (env == NULL) {
 		return FALSE;
 	}
 
@@ -223,7 +233,7 @@ create_controller_for_host (WebView2Host *host)
 	controller_handler->host = host;
 
 	hr = ICoreWebView2Environment_CreateCoreWebView2Controller (
-		g_env,
+		env,
 		host->parent,
 		&controller_handler->iface);
 	ICoreWebView2CreateCoreWebView2ControllerCompletedHandler_Release (&controller_handler->iface);
@@ -239,9 +249,21 @@ static HRESULT STDMETHODCALLTYPE env_handler_invoke (
 	HRESULT error_code,
 	ICoreWebView2Environment *environment)
 {
+	EnvCompletedHandler *self = (EnvCompletedHandler *) This;
 	int i;
 
-	(void) This;
+	if (self != NULL && self->host != NULL) {
+		if (FAILED (error_code) || environment == NULL) {
+			fprintf (stderr, "WebView2 hop environment failed: 0x%08lx\n", (unsigned long) error_code);
+			return error_code;
+		}
+		self->host->env = environment;
+		ICoreWebView2Environment_AddRef (self->host->env);
+		InterlockedIncrement (&g_hop_env_count);
+		create_controller_for_host (self->host);
+		return S_OK;
+	}
+
 	InterlockedExchange (&g_env_creating, 0);
 
 	if (FAILED (error_code) || environment == NULL) {
@@ -302,6 +324,32 @@ vala_webview2_com_begin_host (WebView2Host *host, HWND parent, LPCWSTR url, cons
 
 	if (!vala_webview2_loader_init ()) {
 		return FALSE;
+	}
+
+	if (vala_webview2_host_embedded_proxy_active ()) {
+		host->route_id = (int) InterlockedIncrement (&g_next_route_id);
+		env_handler = (EnvCompletedHandler *) CoTaskMemAlloc (sizeof (EnvCompletedHandler));
+		if (env_handler == NULL) {
+			return FALSE;
+		}
+		ZeroMemory (env_handler, sizeof (*env_handler));
+		env_handler->iface.lpVtbl = &env_handler->vtbl;
+		env_handler->vtbl.QueryInterface = env_handler_qi;
+		env_handler->vtbl.AddRef = env_handler_addref;
+		env_handler->vtbl.Release = env_handler_release;
+		env_handler->vtbl.Invoke = env_handler_invoke;
+		env_handler->ref_count = 1;
+		env_handler->host = host;
+		hr = vala_webview2_loader_create_environment_for_host (
+			host->route_id,
+			&env_handler->iface
+		);
+		ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler_Release (&env_handler->iface);
+		if (FAILED (hr)) {
+			fprintf (stderr, "CreateCoreWebView2EnvironmentWithOptions (hop) failed: 0x%08lx\n", (unsigned long) hr);
+			return FALSE;
+		}
+		return TRUE;
 	}
 
 	if (g_env != NULL) {
@@ -513,6 +561,21 @@ vala_webview2_com_get_environment (void)
 	return g_env;
 }
 
+bool
+vala_webview2_com_has_any_environment (void)
+{
+	return g_env != NULL || InterlockedCompareExchange (&g_hop_env_count, 0, 0) > 0;
+}
+
+int
+vala_webview2_host_get_route_id (WebView2Host *host)
+{
+	if (host == NULL) {
+		return 0;
+	}
+	return host->route_id;
+}
+
 ICoreWebView2Controller *
 vala_webview2_com_get_controller_for (WebView2Host *host)
 {
@@ -580,11 +643,17 @@ vala_webview2_com_release_host (WebView2Host *host)
 	}
 	host->ready = FALSE;
 
-	left = InterlockedDecrement (&g_env_refcount);
-	if (left <= 0 && g_env != NULL) {
-		ICoreWebView2Environment_Release (g_env);
-		g_env = NULL;
-		g_env_refcount = 0;
+	if (host->env != NULL) {
+		ICoreWebView2Environment_Release (host->env);
+		host->env = NULL;
+		InterlockedDecrement (&g_hop_env_count);
+	} else {
+		left = InterlockedDecrement (&g_env_refcount);
+		if (left <= 0 && g_env != NULL) {
+			ICoreWebView2Environment_Release (g_env);
+			g_env = NULL;
+			g_env_refcount = 0;
+		}
 	}
 	CoTaskMemFree (host);
 }

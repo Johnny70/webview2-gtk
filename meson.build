@@ -1,7 +1,7 @@
 project(
   'webview2-gtk',
   ['c', 'vala'],
-  version: '0.5.13',
+  version: '0.6.0',
   meson_version: '>= 1.0.0',
   default_options: ['buildtype=debugoptimized', 'c_std=c11'],
 )
@@ -66,6 +66,7 @@ lib_depend_files = files(
   'lib/webview2gtk/ResponsePolicyDecision.vala',
   'lib/webview2gtk/WebResource.vala',
   'lib/webview2gtk/Download.vala',
+  'lib/webview2gtk/EmbeddedProxy.vala',
   'lib/webview2gtk/NetworkSession.vala',
   'lib/webview2gtk/ApplicationInfo.vala',
   'lib/webview2gtk/AutomationSession.vala',
@@ -83,6 +84,8 @@ lib_depend_files = files(
   'lib/host/win32-ui-webview2-loader.c',
   'lib/host/win32-ui-webview2-com-glue.c',
   'lib/host/win32-ui-webview2-automation.c',
+  'lib/host/win32-ui-webview2-proxy.c',
+  'lib/host/win32-ui-webview2-proxy.h',
   'lib/host/win32-ui-webview2-script.c',
   'lib/host/win32-ui-webview2-capture.c',
   'lib/host/win32-ui-webview2-print.c',

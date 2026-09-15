@@ -6,7 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [0.5.13] - Unreleased
+## [0.6.0] - Unreleased
+
+### Added
+
+- Library loopback CONNECT hop (always linked; no meson flag). First `NetworkSession.set_proxy_settings(CUSTOM, …)` before any WebView is shown starts a listen thread; every later view gets its own Environment + `UserDataFolder` (`%LOCALAPPDATA%\webview2gtk\profiles\wv_<id>`) and `--proxy-server=http://<id>@127.0.0.1:<port>`. Dummy `http://127.0.0.1` (optional `:port`) is pass-through; any other URI is a live per-session relay ([plan 6.0](docs/plans/done/6.0-embedded-proxy.md)).
+
+### Changed
+
+- `set_proxy_settings(CUSTOM)` after a shared (non-hop) environment already exists warns and does not latch a process-wide Chromium `--proxy-server=<uri>` (supersedes the unreleased 5.0 latch).
+- `--smoke-proxy` uses `http://192.0.2.1:1` (TEST-NET). Loopback is the pass-through sentinel.
+- README / automation.md: hop + per-view routing is the supported Windows proxy story.
+
+## [0.5.13] - 2026-09-10
 
 ### Added
 

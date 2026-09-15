@@ -4,7 +4,7 @@
  *   --smoke-changed CookieManager.changed fires on add/replace (bug 2026-09-07)
  *   --smoke-replace-startup  large fire-and-forget replace at construct (bug 2026-09-09)
  *   --smoke-persist TEXT set_persistent_storage survives “restart” (bug 2026-09-09)
- *   --smoke-proxy   CUSTOM proxy to closed port → navigate fails closed (plan 5.0)
+ *   --smoke-proxy   CUSTOM to TEST-NET closed hop → navigate fails closed (plan 6.0)
  *
  *   webview2gtk-add-cookie.exe [url]
  *   webview2gtk-add-cookie.exe --smoke
@@ -406,14 +406,14 @@ private void finish_proxy(bool ok) {
 
 private void start_smoke_proxy() {
 	/*
-	 * Closed local port — if --proxy-server is honored, https://example.com
-	 * must not load “Example Domain”. Fail-closed = pass.
+	 * Non-loopback dead hop (TEST-NET). 127.0.0.1 is the pass-through
+	 * sentinel — 192.0.2.1:1 must fail-closed if the hop chains CUSTOM.
 	 */
 	web.network_session.set_proxy_settings(
 		NetworkProxyMode.CUSTOM,
-		new NetworkProxySettings("http://127.0.0.1:1", null)
+		new NetworkProxySettings("http://192.0.2.1:1", null)
 	);
-	print("smoke-proxy set CUSTOM http://127.0.0.1:1 before present\n");
+	print("smoke-proxy set CUSTOM http://192.0.2.1:1 before present\n");
 	web.load_failed.connect((load_event, failing_uri, error) => {
 		print("smoke-proxy load_failed %s: %s\n", failing_uri, error.message);
 		proxy_load_failed = true;

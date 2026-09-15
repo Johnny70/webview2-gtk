@@ -33,6 +33,7 @@ valadoc_docs = custom_target(
     '../lib/webview2gtk/ResponsePolicyDecision.vala',
     '../lib/webview2gtk/WebResource.vala',
     '../lib/webview2gtk/Download.vala',
+    '../lib/webview2gtk/EmbeddedProxy.vala',
     '../lib/webview2gtk/NetworkSession.vala',
     '../lib/webview2gtk/ApplicationInfo.vala',
     '../lib/webview2gtk/AutomationSession.vala',
