@@ -650,6 +650,13 @@ public static int main(string[] args) {
 		window.set_title("webview2-gtk add-cookie");
 		window.set_default_size(800, 560);
 
+		if (smoke_proxy) {
+			var hop = new NetworkSession(null, null);
+			hop.set_proxy_settings(
+				NetworkProxyMode.CUSTOM,
+				new NetworkProxySettings("http://127.0.0.1", null)
+			);
+		}
 		web = new WebView();
 		web.set_hexpand(true);
 		web.set_vexpand(true);

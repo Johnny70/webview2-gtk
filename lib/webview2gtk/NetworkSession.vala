@@ -54,7 +54,12 @@ public class NetworkSession : Object {
 
 	public signal void download_started(Download download);
 
-	public NetworkSession() {
+	/**
+	 * WebKitGTK-shaped — ''data_directory'' / ''cache_directory'' are
+	 * accepted for API parity and ignored on Windows (WebView2 user-data
+	 * is per view).
+	 */
+	public NetworkSession(string? data_directory = null, string? cache_directory = null) {
 		this.cookie_manager = new CookieManager(this);
 		NetworkSession.active_session = this;
 	}

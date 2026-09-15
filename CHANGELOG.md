@@ -6,7 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [0.6.0] - Unreleased
+## [0.6.1] - Unreleased
+
+### Added
+
+- `NetworkSession` ctor matches WebKitGTK `(string? data_directory, string? cache_directory)` so `new NetworkSession(null, null)` compiles in shared apps; the directories are ignored on Windows ([bug](docs/bugs/done/2026-09-15-network-session-ctor-webkit-parity.md)).
+
+### Fixed
+
+- Duplicate `wv2_host_embedded_proxy_active` extern (vala compile) and `inet.port` (`uint` → `uint16`) assignment.
+- Valadoc: hop / dummy URIs use `[[http://…]]` wiki links so `http://` in `''…''` no longer fails the docs job.
+
+## [0.6.0] - 2026-09-15
 
 ### Added
 

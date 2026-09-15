@@ -86,6 +86,7 @@ thread when the view is bound (live; no env recreate).
 
 ```vala
 /* Before any window — start hop, pass-through */
+var session = new NetworkSession(null, null);
 session.set_proxy_settings(
 	NetworkProxyMode.CUSTOM,
 	new NetworkProxySettings("http://127.0.0.1", null)
