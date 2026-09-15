@@ -13,7 +13,7 @@ namespace WebView2Gtk
 	 * Port of the consumer CONNECT / forward server: own thread +
 	 * ''GLib.MainContext''. Routes are per view id (Proxy-Authorization)
 	 * instead of per host; GTK posts via ''context.invoke''. Dummy
-	 * ''http://127.0.0.1'' CUSTOM is pass-through, not an upstream.
+	 * [[http://127.0.0.1]] CUSTOM is pass-through, not an upstream.
 	 */
 	internal class EmbeddedProxy : Object
 	{
@@ -348,7 +348,7 @@ namespace WebView2Gtk
 
 		/**
 		 * Forward one HTTP request (absolute-form, or origin-form already
-		 * rewritten to ''http://host/path''). Optional upstream hop.
+		 * rewritten to [[http://host/path]]). Optional upstream hop.
 		 */
 		private async void forward_http(
 			OutputStream client_out,

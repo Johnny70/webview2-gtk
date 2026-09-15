@@ -283,9 +283,10 @@ public class NetworkSession : Object {
 	 *
 	 * On Windows, the first ''CUSTOM'' before any WebView is shown starts the
 	 * library loopback hop and every later view’s environment points at it
-	 * (''http://id@127.0.0.1:port''). Loopback / dummy URIs are pass-through.
-	 * A non-loopback URI is a live relay for this session. ''CUSTOM'' after a
-	 * shared (non-hop) environment already exists is an error.
+	 * ([[http://id@127.0.0.1:port]]). Dummy [[http://127.0.0.1]] is
+	 * pass-through. A non-loopback URI is a live relay for this session.
+	 * ''CUSTOM'' after a shared (non-hop) environment already exists is an
+	 * error.
 	 */
 	public void set_proxy_settings(
 		NetworkProxyMode mode,

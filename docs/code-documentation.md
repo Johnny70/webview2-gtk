@@ -32,6 +32,7 @@ Gold-standard style for major APIs: **OLLMchat** [`docs/code-documentation.md`](
 | Multi-line `{{{ … }}}` | Block code samples only (`== Usage Examples ==`) | Inline in prose |
 | `{{{ token }}}` in a sentence | ❌ | Becomes a `<pre>` block mid-paragraph |
 | `''Name''` or `{@link Type}` | Inline type / flag / short literal | — |
+| `[[http://host|label]]` | URLs in prose (see **Links** below) | Bare `http://` in a sentence or in `''…''` |
 
 ```vala
 /**
@@ -47,6 +48,18 @@ Gold-standard style for major APIs: **OLLMchat** [`docs/code-documentation.md`](
  * Bad — inline triple braces: {{{WebView}}} in running text.
  */
 ```
+
+## Links
+
+- `[[http://example.com|label]]` → link with text “label”
+- `[[http://example.com]]` → bare URL
+- `{@link SymbolName}` → link to a Vala symbol
+
+**URLs only inside `[[ … ]]` (or `{{{ … }}}` samples).** A bare
+`http://…` / `https://…` in docblock prose — with or without `''…''` — makes
+valadoc fail with `unexpected token: <end-of-line>` (its URL lexer swallows
+the rest of the line, including any closing `''`). Same rule as
+[OLLMchat `docs/code-documentation.md`](https://github.com/roojs/OLLMchat/blob/main/docs/code-documentation.md).
 
 ## Class and namespace overviews
 
