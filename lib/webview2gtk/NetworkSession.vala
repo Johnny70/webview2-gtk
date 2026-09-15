@@ -4,9 +4,6 @@ extern void wv2_host_set_proxy_settings(int mode, string? proxy_uri);
 [CCode(cheader_filename = "webview2gtk-host-api.h", cname = "vala_webview2_host_environment_created")]
 extern bool wv2_host_environment_created();
 
-[CCode(cheader_filename = "webview2gtk-host-api.h", cname = "vala_webview2_host_embedded_proxy_active")]
-extern bool wv2_host_embedded_proxy_active();
-
 [CCode(cheader_filename = "webview2gtk-host-api.h", cname = "vala_webview2_host_get_route_id")]
 extern int wv2_host_get_route_id(void* host);
 

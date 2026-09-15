@@ -111,7 +111,7 @@ namespace WebView2Gtk
 				if (inet == null || inet.port == 0) {
 					throw new IOError.FAILED("loopback bind did not return a port");
 				}
-				this.port = inet.port;
+				this.port = (uint16) inet.port;
 				foreach (var id in this.pending.keys) {
 					this.routes[id] = this.pending[id];
 				}
@@ -183,16 +183,13 @@ namespace WebView2Gtk
 					if (auth.length < 2 || auth[0].down() != "basic") {
 						break;
 					}
-					try {
-						var decoded = (string) Base64.decode(auth[1].strip());
-						var colon = decoded.index_of_char(':');
-						var id_text = decoded;
-						if (colon >= 0) {
-							id_text = decoded.substring(0, colon);
-						}
-						view_id = int.parse(id_text);
-					} catch (Error e) {
+					var decoded = (string) Base64.decode(auth[1].strip());
+					var colon = decoded.index_of_char(':');
+					var id_text = decoded;
+					if (colon >= 0) {
+						id_text = decoded.substring(0, colon);
 					}
+					view_id = int.parse(id_text);
 					break;
 				}
 				if (view_id <= 0) {
