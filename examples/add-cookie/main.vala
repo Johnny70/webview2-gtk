@@ -6,6 +6,7 @@
  *   --smoke-persist TEXT set_persistent_storage survives “restart” (bug 2026-09-09)
  *   --smoke-proxy   CUSTOM to TEST-NET closed proxy → navigate fails closed (plan 6.0)
  *   --smoke-proxy-direct  dummy local host proxy on, then example.com must FINISH (pass-through)
+ *   --smoke-proxy-late  dummy hop, attach, then CUSTOM TEST-NET — must not paint example.com
  *
  *   webview2gtk-add-cookie.exe [url]
  *   webview2gtk-add-cookie.exe --smoke
@@ -15,6 +16,7 @@
  *   webview2gtk-add-cookie.exe --smoke-persist
  *   webview2gtk-add-cookie.exe --smoke-proxy
  *   webview2gtk-add-cookie.exe --smoke-proxy-direct
+ *   webview2gtk-add-cookie.exe --smoke-proxy-late
  *
  * See docs/bugs/done/2026-08-25-add-cookie-before-attach.md
  *     docs/bugs/done/2026-09-07-cookie-manager-get-all-replace.md
@@ -41,6 +43,7 @@ private bool smoke_replace_startup = false;
 private bool smoke_persist = false;
 private bool smoke_proxy = false;
 private bool smoke_proxy_direct = false;
+private bool smoke_proxy_late = false;
 private bool proxy_load_failed = false;
 private bool proxy_saw_example = false;
 private int smoke_status = 1;
@@ -494,6 +497,58 @@ private void start_smoke_proxy_direct() {
 	web.load_uri("https://example.com/");
 }
 
+private bool smoke_proxy_late_started = false;
+
+private void start_smoke_proxy_late_navigate() {
+	if (smoke_proxy_late_started || smoke_done) {
+		return;
+	}
+	smoke_proxy_late_started = true;
+	print("smoke-proxy-late set CUSTOM http://192.0.2.1:1 after attach\n");
+	web.network_session.set_proxy_settings(
+		NetworkProxyMode.CUSTOM,
+		new NetworkProxySettings("http://192.0.2.1:1", null)
+	);
+	web.load_failed.connect((load_event, failing_uri, error) => {
+		print("smoke-proxy-late load_failed %s: %s\n", failing_uri, error.message);
+		if (failing_uri != null && failing_uri.down().has_prefix("about:")) {
+			return false;
+		}
+		proxy_load_failed = true;
+		Idle.add(() => {
+			finish_proxy(true);
+			return Source.REMOVE;
+		});
+		return false;
+	});
+	web.load_changed.connect((load_event) => {
+		if (load_event != LoadEvent.FINISHED || smoke_done) {
+			return;
+		}
+		var title = web.get_title() ?? "";
+		print("smoke-proxy-late FINISHED title=%s\n", title);
+		if (title.down().contains("example domain")) {
+			proxy_saw_example = true;
+			finish_proxy(false);
+		}
+	});
+	web.load_uri("https://example.com/");
+}
+
+private void start_smoke_proxy_late() {
+	print("smoke-proxy-late wait for ready then CUSTOM TEST-NET\n");
+	Timeout.add(100, () => {
+		if (smoke_done) {
+			return Source.REMOVE;
+		}
+		if (!web.ready) {
+			return Source.CONTINUE;
+		}
+		start_smoke_proxy_late_navigate();
+		return Source.REMOVE;
+	});
+}
+
 private string big_cookie_value(int len) {
 	var sb = new StringBuilder();
 	for (var i = 0; i < len; i++) {
@@ -698,6 +753,10 @@ public static int main(string[] args) {
 			smoke_proxy_direct = true;
 			continue;
 		}
+		if (args[i] == "--smoke-proxy-late") {
+			smoke_proxy_late = true;
+			continue;
+		}
 		if (args[i].has_prefix("-")) {
 			gtk_args += args[i];
 			continue;
@@ -711,7 +770,7 @@ public static int main(string[] args) {
 		window.set_title("webview2-gtk add-cookie");
 		window.set_default_size(800, 560);
 
-		if (smoke_proxy || smoke_proxy_direct) {
+		if (smoke_proxy || smoke_proxy_direct || smoke_proxy_late) {
 			var session = new NetworkSession(null, null);
 			session.set_proxy_settings(
 				NetworkProxyMode.CUSTOM,
@@ -733,7 +792,7 @@ public static int main(string[] args) {
 			: (smoke_changed ? "changed…"
 			: (smoke_replace_startup ? "replace-startup…"
 			: (smoke_persist ? "persist…"
-			: ((smoke_proxy || smoke_proxy_direct) ? "proxy…" : "injecting…")))));
+			: ((smoke_proxy || smoke_proxy_direct || smoke_proxy_late) ? "proxy…" : "injecting…")))));
 		status.set_wrap(true);
 		status.set_xalign(0);
 		status.set_selectable(true);
@@ -762,6 +821,9 @@ public static int main(string[] args) {
 		} else if (smoke_proxy_direct) {
 			print("startup proxy-direct before present %s\n", diag_line());
 			start_smoke_proxy_direct();
+		} else if (smoke_proxy_late) {
+			print("startup proxy-late before present %s\n", diag_line());
+			start_smoke_proxy_late();
 		} else {
 			/* Inject on the same turn as first show — do not wait for ready/map. */
 			print("startup before present %s\n", diag_line());
@@ -772,9 +834,10 @@ public static int main(string[] args) {
 		refresh_status();
 
 		if (smoke || smoke_mirror || smoke_changed || smoke_replace_startup
-		    || smoke_persist || smoke_proxy || smoke_proxy_direct) {
+		    || smoke_persist || smoke_proxy || smoke_proxy_direct
+		    || smoke_proxy_late) {
 			var timeout_ms = smoke_replace_startup ? 60000
-				: (smoke_proxy_direct ? 20000 : 12000);
+				: ((smoke_proxy_direct || smoke_proxy_late) ? 20000 : 12000);
 			Timeout.add(timeout_ms, () => {
 				if (!smoke_done) {
 					if (smoke_mirror) {
@@ -796,6 +859,13 @@ public static int main(string[] args) {
 					} else if (smoke_proxy_direct) {
 						print("smoke-proxy-direct timeout\n");
 						finish_proxy_direct(false);
+					} else if (smoke_proxy_late) {
+						print("smoke-proxy-late timeout\n");
+						if (!smoke_proxy_late_started) {
+							finish_proxy(false);
+						} else {
+							finish_proxy(!proxy_saw_example);
+						}
 					} else {
 						check_cookies_then_finish.begin();
 					}
@@ -806,6 +876,7 @@ public static int main(string[] args) {
 	});
 	app.run(gtk_args);
 	return (smoke || smoke_mirror || smoke_changed || smoke_replace_startup
-	    || smoke_persist || smoke_proxy || smoke_proxy_direct)
+	    || smoke_persist || smoke_proxy || smoke_proxy_direct
+	    || smoke_proxy_late)
 		? smoke_status : 0;
 }

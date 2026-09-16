@@ -33,6 +33,7 @@ struct WebView2Host {
 	EventRegistrationToken tok_nav_completed;
 	EventRegistrationToken tok_nav_starting;
 	EventRegistrationToken tok_title;
+	EventRegistrationToken tok_proxy_auth;
 	WebView2GtkEventCb cb_nav_starting;
 	WebView2GtkNavCompletedCb cb_nav_completed;
 	WebView2GtkEventCb cb_title_changed;

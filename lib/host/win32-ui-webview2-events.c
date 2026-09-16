@@ -9,7 +9,9 @@
 
 #include "win32-ui-webview2-events.h"
 #include "win32-ui-webview2-host-priv.h"
+#include "win32-ui-webview2-proxy.h"
 #include "win32-ui-webview2-sdk.h"
+#include <wchar.h>
 
 typedef struct WebView2EventHandler0 {
 	ICoreWebView2NavigationCompletedEventHandler iface;
@@ -77,6 +79,14 @@ static HRESULT STDMETHODCALLTYPE event_handler0_invoke (
 	(void) sender;
 	if (args != NULL) {
 		ICoreWebView2NavigationCompletedEventArgs_get_IsSuccess (args, &success);
+		{
+			COREWEBVIEW2_WEB_ERROR_STATUS err = COREWEBVIEW2_WEB_ERROR_STATUS_UNKNOWN;
+			ICoreWebView2NavigationCompletedEventArgs_get_WebErrorStatus (args, &err);
+			if (err == COREWEBVIEW2_WEB_ERROR_STATUS_VALID_PROXY_AUTHENTICATION_REQUIRED) {
+				/* 407 handshake; Chromium retries with Proxy-Authorization. */
+				return S_OK;
+			}
+		}
 	}
 	if (host != NULL && host->cb_nav_completed != NULL) {
 		host->cb_nav_completed (host->event_user_data, success ? true : false);
@@ -182,6 +192,112 @@ static HRESULT STDMETHODCALLTYPE event_handler2_invoke (
 	return S_OK;
 }
 
+typedef struct WebView2ProxyAuthHandler {
+	ICoreWebView2BasicAuthenticationRequestedEventHandler iface;
+	ICoreWebView2BasicAuthenticationRequestedEventHandlerVtbl vtbl;
+	LONG ref_count;
+	WebView2Host *host;
+} WebView2ProxyAuthHandler;
+
+static BOOL
+uri_is_local_host_proxy (LPCWSTR uri, unsigned port)
+{
+	wchar_t needle[32];
+	const wchar_t *found;
+	size_t nlen;
+
+	if (uri == NULL || port == 0 || wcsstr (uri, L"127.0.0.1") == NULL) {
+		return FALSE;
+	}
+	_snwprintf (needle, 32, L":%u", port);
+	needle[31] = L'\0';
+	found = wcsstr (uri, needle);
+	if (found == NULL) {
+		return FALSE;
+	}
+	nlen = wcslen (needle);
+	return found[nlen] == L'\0' || found[nlen] == L'/' || found[nlen] == L':';
+}
+
+static HRESULT STDMETHODCALLTYPE proxy_auth_qi (
+	ICoreWebView2BasicAuthenticationRequestedEventHandler *This,
+	REFIID riid,
+	void **ppv)
+{
+	if (IsEqualIID (riid, &IID_IUnknown)
+	    || IsEqualIID (riid, &IID_ICoreWebView2BasicAuthenticationRequestedEventHandler)) {
+		*ppv = This;
+		ICoreWebView2BasicAuthenticationRequestedEventHandler_AddRef (This);
+		return S_OK;
+	}
+	*ppv = NULL;
+	return E_NOINTERFACE;
+}
+
+static ULONG STDMETHODCALLTYPE proxy_auth_addref (
+	ICoreWebView2BasicAuthenticationRequestedEventHandler *This)
+{
+	WebView2ProxyAuthHandler *self = (WebView2ProxyAuthHandler *) This;
+	return (ULONG) InterlockedIncrement (&self->ref_count);
+}
+
+static ULONG STDMETHODCALLTYPE proxy_auth_release (
+	ICoreWebView2BasicAuthenticationRequestedEventHandler *This)
+{
+	WebView2ProxyAuthHandler *self = (WebView2ProxyAuthHandler *) This;
+	LONG count = InterlockedDecrement (&self->ref_count);
+	if (count == 0) {
+		CoTaskMemFree (self);
+	}
+	return (ULONG) count;
+}
+
+static HRESULT STDMETHODCALLTYPE proxy_auth_invoke (
+	ICoreWebView2BasicAuthenticationRequestedEventHandler *This,
+	ICoreWebView2 *sender,
+	ICoreWebView2BasicAuthenticationRequestedEventArgs *args)
+{
+	WebView2ProxyAuthHandler *self = (WebView2ProxyAuthHandler *) This;
+	WebView2Host *host = self->host;
+	ICoreWebView2BasicAuthenticationResponse *response = NULL;
+	LPWSTR uri = NULL;
+	wchar_t user[16];
+	unsigned port;
+
+	(void) sender;
+	if (host == NULL || args == NULL || host->route_id <= 0) {
+		return S_OK;
+	}
+	port = vala_webview2_host_embedded_proxy_port ();
+	if (FAILED (ICoreWebView2BasicAuthenticationRequestedEventArgs_get_Uri (args, &uri))
+	    || uri == NULL) {
+		return S_OK;
+	}
+	if (!uri_is_local_host_proxy (uri, port)) {
+		CoTaskMemFree (uri);
+		return S_OK;
+	}
+	if (FAILED (ICoreWebView2BasicAuthenticationRequestedEventArgs_get_Response (
+		    args, &response))
+	    || response == NULL) {
+		CoTaskMemFree (uri);
+		return S_OK;
+	}
+	_snwprintf (user, 16, L"%d", host->route_id);
+	user[15] = L'\0';
+	ICoreWebView2BasicAuthenticationResponse_put_UserName (response, user);
+	ICoreWebView2BasicAuthenticationResponse_put_Password (response, L"");
+	fprintf (
+		stderr,
+		"webview2gtk: local host proxy BasicAuthenticationRequested id=%d uri=%ls\n",
+		host->route_id,
+		uri
+	);
+	ICoreWebView2BasicAuthenticationResponse_Release (response);
+	CoTaskMemFree (uri);
+	return S_OK;
+}
+
 void
 vala_webview2_events_register_host (WebView2Host *host)
 {
@@ -256,6 +372,42 @@ vala_webview2_events_register_host (WebView2Host *host)
 		}
 	}
 
+	{
+		ICoreWebView2_10 *wv10 = NULL;
+
+		hr = ICoreWebView2_QueryInterface (
+			webview, &IID_ICoreWebView2_10, (void **) &wv10);
+		if (SUCCEEDED (hr) && wv10 != NULL) {
+			WebView2ProxyAuthHandler *handler = (WebView2ProxyAuthHandler *) CoTaskMemAlloc (
+				sizeof (WebView2ProxyAuthHandler));
+			if (handler != NULL) {
+				ZeroMemory (handler, sizeof (*handler));
+				handler->iface.lpVtbl = &handler->vtbl;
+				handler->vtbl.QueryInterface = proxy_auth_qi;
+				handler->vtbl.AddRef = proxy_auth_addref;
+				handler->vtbl.Release = proxy_auth_release;
+				handler->vtbl.Invoke = proxy_auth_invoke;
+				handler->ref_count = 1;
+				handler->host = host;
+				hr = ICoreWebView2_10_add_BasicAuthenticationRequested (
+					wv10, &handler->iface, &host->tok_proxy_auth);
+				if (FAILED (hr)) {
+					fprintf (
+						stderr,
+						"WebView2 add_BasicAuthenticationRequested failed: 0x%08lx\n",
+						(unsigned long) hr
+					);
+					ICoreWebView2BasicAuthenticationRequestedEventHandler_Release (
+						&handler->iface);
+				} else {
+					ICoreWebView2BasicAuthenticationRequestedEventHandler_Release (
+						&handler->iface);
+				}
+			}
+			ICoreWebView2_10_Release (wv10);
+		}
+	}
+
 	host->events_registered = TRUE;
 }
 
@@ -271,6 +423,17 @@ vala_webview2_events_unregister_host (WebView2Host *host)
 	ICoreWebView2_remove_NavigationCompleted (webview, host->tok_nav_completed);
 	ICoreWebView2_remove_NavigationStarting (webview, host->tok_nav_starting);
 	ICoreWebView2_remove_DocumentTitleChanged (webview, host->tok_title);
+	{
+		ICoreWebView2_10 *wv10 = NULL;
+
+		if (SUCCEEDED (ICoreWebView2_QueryInterface (
+			    webview, &IID_ICoreWebView2_10, (void **) &wv10))
+		    && wv10 != NULL) {
+			ICoreWebView2_10_remove_BasicAuthenticationRequested (
+				wv10, host->tok_proxy_auth);
+			ICoreWebView2_10_Release (wv10);
+		}
+	}
 	host->events_registered = FALSE;
 }
 

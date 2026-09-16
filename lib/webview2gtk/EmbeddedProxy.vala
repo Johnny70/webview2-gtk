@@ -14,7 +14,9 @@ namespace WebView2Gtk
 	 * first. One route table lives on that thread; GTK posts a one-line
 	 * change with ''context.invoke''. Per view id (Proxy-Authorization).
 	 * No row (and dummy [[http://127.0.0.1]]) is pass-through: connect out,
-	 * no extra upstream. ''about:'' is answered without a table lookup.
+	 * no extra upstream. First CONNECT with no Basic user is 407 so Chromium
+	 * retries with Proxy-Authorization (view id). ''about:'' is answered
+	 * without a table lookup.
 	 */
 	internal class EmbeddedProxy : Object
 	{
@@ -186,8 +188,12 @@ namespace WebView2Gtk
 					break;
 				}
 				if (view_id <= 0) {
-					GLib.debug("webview2gtk: proxy no auth %s %s (pass-through)",
+					GLib.debug("webview2gtk: proxy no auth %s %s (407)",
 						parts[0], parts[1]);
+					var need_auth = "HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm=\"webview2gtk\"\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+					client.output_stream.write_all(need_auth.data[0:need_auth.length], null);
+					client.close();
+					return;
 				}
 				if (parts[1].down().has_prefix("about:")) {
 					string about_ok;

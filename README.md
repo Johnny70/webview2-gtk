@@ -100,7 +100,7 @@ The API **looks** like WebKitGTK; several behaviors do **not**. Read these befor
 
 On **WebKitGTK**, `set_proxy_settings` applies to that `NetworkSession` and can change while the session is live.
 
-On **Windows**, the first `CUSTOM` **before** any WebView is shown starts a library local host CONNECT proxy. Every later view gets its own Environment + `UserDataFolder` pointed at `http://127.0.0.1:<port>`. Dummy `http://127.0.0.1` (optional `:port`), no `Proxy-Authorization`, and no table row are pass-through; any other CUSTOM URI is a live relay for that session. `CUSTOM` after a shared environment (no local host proxy) already exists is an error. Never calling `CUSTOM` keeps the shared environment (no local host proxy). Details and smoke: [automation.md](docs/automation.md).
+On **Windows**, the first `CUSTOM` **before** any WebView is shown starts a library local host CONNECT proxy. Every later view gets its own Environment + `UserDataFolder` pointed at `http://127.0.0.1:<port>`. A 407 + `BasicAuthenticationRequested` supplies the view id (Chromium rejects `id@` in `--proxy-server`). Dummy `http://127.0.0.1` (optional `:port`) and no table row are pass-through; any other CUSTOM URI is a live relay for that session. `CUSTOM` after a shared environment (no local host proxy) already exists is an error. Never calling `CUSTOM` keeps the shared environment (no local host proxy). Details and smoke: [automation.md](docs/automation.md).
 
 ### Other create-time Chromium flags
 

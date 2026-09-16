@@ -288,9 +288,10 @@ public class NetworkSession : Object {
 	 *
 	 * On Windows, the first ''CUSTOM'' before any WebView is shown starts the
 	 * library local host proxy and every later view’s environment points at it
-	 * ([[http://127.0.0.1:port]]). Dummy [[http://127.0.0.1]], no
-	 * Proxy-Authorization, and no table row are pass-through. Any other URI
-	 * is a live relay for this session.
+	 * ([[http://127.0.0.1:port]]). Chromium has no userinfo in that URI;
+	 * the first CONNECT gets 407 and BasicAuthenticationRequested supplies
+	 * the view id as Basic user. Dummy [[http://127.0.0.1]] and no table
+	 * row are pass-through. Any other URI is a live relay for this session.
 	 * ''CUSTOM'' after a shared environment (no local host proxy) already
 	 * exists is an error.
 	 */

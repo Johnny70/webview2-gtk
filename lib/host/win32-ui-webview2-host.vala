@@ -113,10 +113,12 @@ public void finish_setup(
 	if (parent != null) {
 		com_present_webview(parent);
 	}
-	/* Queued cookies must land in COM before the first Navigate. */
+	/* Queued cookies must land in COM before the first Navigate.
+	 * BasicAuthenticationRequested must be attached before Navigate so a
+	 * 407 from the local host proxy can carry the view id. */
 	host_apply_pending_cookies(host);
-	host_flush_pending_navigate(host);
 	events_register(host);
+	host_flush_pending_navigate(host);
 	document_response_register(host);
 	script_messages_register(host);
 	downloads_register(host);

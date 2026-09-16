@@ -112,9 +112,10 @@ Smoke:
 ```powershell
 & 'C:\msys64\tmp\webview2-gtk\portable-demos\webview2gtk-add-cookie.exe' --smoke-proxy-direct
 & 'C:\msys64\tmp\webview2-gtk\portable-demos\webview2gtk-add-cookie.exe' --smoke-proxy
+& 'C:\msys64\tmp\webview2-gtk\portable-demos\webview2gtk-add-cookie.exe' --smoke-proxy-late
 ```
 
-Pass: `--smoke-proxy-direct` `TEST_PASS` (dummy local host proxy, example.com paints). `--smoke-proxy` `TEST_PASS` (CUSTOM to `http://192.0.2.1:1` fails closed — no “Example Domain”).
+Pass: `--smoke-proxy-direct` `TEST_PASS` (dummy local host proxy, example.com paints). `--smoke-proxy` / `--smoke-proxy-late` `TEST_PASS` (CUSTOM to `http://192.0.2.1:1` fails closed — no “Example Domain”). The first CONNECT is 407; `BasicAuthenticationRequested` supplies the view id.
 
 ## Demo and smokes
 

@@ -67,6 +67,7 @@ LOG_REPLACE=/c/Users/Alan/AppData/Local/Temp/webview2gtk-add-cookie-replace-star
 LOG_PERSIST=/c/Users/Alan/AppData/Local/Temp/webview2gtk-add-cookie-persist-smoke.log
 LOG_PROXY=/c/Users/Alan/AppData/Local/Temp/webview2gtk-add-cookie-proxy-smoke.log
 LOG_PROXY_DIRECT=/c/Users/Alan/AppData/Local/Temp/webview2gtk-add-cookie-proxy-direct-smoke.log
+LOG_PROXY_LATE=/c/Users/Alan/AppData/Local/Temp/webview2gtk-add-cookie-proxy-late-smoke.log
 fail=0
 if [[ "${1:-}" == "--smoke-proxy-direct" ]]; then
 	run_one --smoke-proxy-direct WebView2GtkAddCookieProxyDirectSmoke "${LOG_PROXY_DIRECT}" \
@@ -76,6 +77,9 @@ if [[ "${1:-}" == "--smoke-proxy-direct" ]]; then
 elif [[ "${1:-}" == "--smoke-proxy" ]]; then
 	run_one --smoke-proxy WebView2GtkAddCookieProxySmoke "${LOG_PROXY}" \
 		"${OUT_DIR}/run-add-cookie-proxy-smoke.bat" || fail=1
+elif [[ "${1:-}" == "--smoke-proxy-late" ]]; then
+	run_one --smoke-proxy-late WebView2GtkAddCookieProxyLateSmoke "${LOG_PROXY_LATE}" \
+		"${OUT_DIR}/run-add-cookie-proxy-late-smoke.bat" 50 || fail=1
 else
 	run_one --smoke WebView2GtkAddCookieSmoke "${LOG_ATTACH}" \
 		"${OUT_DIR}/run-add-cookie-smoke.bat" || fail=1
@@ -91,6 +95,8 @@ else
 		"${OUT_DIR}/run-add-cookie-proxy-direct-smoke.bat" 50 || fail=1
 	run_one --smoke-proxy WebView2GtkAddCookieProxySmoke "${LOG_PROXY}" \
 		"${OUT_DIR}/run-add-cookie-proxy-smoke.bat" || fail=1
+	run_one --smoke-proxy-late WebView2GtkAddCookieProxyLateSmoke "${LOG_PROXY_LATE}" \
+		"${OUT_DIR}/run-add-cookie-proxy-late-smoke.bat" 50 || fail=1
 fi
 
 if [[ "${fail}" -eq 0 ]]; then
