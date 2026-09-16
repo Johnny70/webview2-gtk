@@ -632,12 +632,14 @@ vala_webview2_com_release_host (WebView2Host *host)
 	if (g_last_host == host) {
 		g_last_host = NULL;
 	}
+	if (host->controller != NULL) {
+		ICoreWebView2Controller_Close (host->controller);
+	}
 	if (host->webview != NULL) {
 		ICoreWebView2_Release (host->webview);
 		host->webview = NULL;
 	}
 	if (host->controller != NULL) {
-		ICoreWebView2Controller_Close (host->controller);
 		ICoreWebView2Controller_Release (host->controller);
 		host->controller = NULL;
 	}

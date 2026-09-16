@@ -71,6 +71,8 @@ fail=0
 if [[ "${1:-}" == "--smoke-proxy-direct" ]]; then
 	run_one --smoke-proxy-direct WebView2GtkAddCookieProxyDirectSmoke "${LOG_PROXY_DIRECT}" \
 		"${OUT_DIR}/run-add-cookie-proxy-direct-smoke.bat" 50 || fail=1
+	run_one --smoke-proxy-direct WebView2GtkAddCookieProxyDirectSmoke2 "${LOG_PROXY_DIRECT}.2" \
+		"${OUT_DIR}/run-add-cookie-proxy-direct-smoke-2.bat" 50 || fail=1
 elif [[ "${1:-}" == "--smoke-proxy" ]]; then
 	run_one --smoke-proxy WebView2GtkAddCookieProxySmoke "${LOG_PROXY}" \
 		"${OUT_DIR}/run-add-cookie-proxy-smoke.bat" || fail=1

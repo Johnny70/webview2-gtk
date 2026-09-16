@@ -21,6 +21,8 @@ typedef HRESULT (STDMETHODCALLTYPE *PFN_CreateCoreWebView2EnvironmentWithOptions
 static HMODULE g_loader_module;
 static PFN_CreateCoreWebView2EnvironmentWithOptions g_create_env_with_options;
 static BOOL g_com_inited;
+static BOOL g_profiles_swept;
+static DWORD g_profile_token;
 
 BOOL vala_webview2_loader_init (void)
 {
@@ -77,9 +79,152 @@ HRESULT vala_webview2_loader_create_environment (
 }
 
 static BOOL
+process_still_running (DWORD pid)
+{
+	HANDLE process;
+	DWORD status;
+
+	if (pid == 0) {
+		return FALSE;
+	}
+	process = OpenProcess (PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+	if (process == NULL) {
+		return GetLastError () == ERROR_ACCESS_DENIED;
+	}
+	if (!GetExitCodeProcess (process, &status)) {
+		CloseHandle (process);
+		return FALSE;
+	}
+	CloseHandle (process);
+	return status == STILL_ACTIVE;
+}
+
+static void
+delete_tree (const wchar_t *path)
+{
+	WIN32_FIND_DATAW fd;
+	wchar_t pattern[MAX_PATH];
+	wchar_t child[MAX_PATH];
+	HANDLE find;
+
+	if (path == NULL || path[0] == L'\0') {
+		return;
+	}
+	_snwprintf (pattern, MAX_PATH, L"%s\\*", path);
+	pattern[MAX_PATH - 1] = L'\0';
+	find = FindFirstFileW (pattern, &fd);
+	if (find != INVALID_HANDLE_VALUE) {
+		do {
+			if (wcscmp (fd.cFileName, L".") == 0
+			    || wcscmp (fd.cFileName, L"..") == 0) {
+				continue;
+			}
+			_snwprintf (child, MAX_PATH, L"%s\\%s", path, fd.cFileName);
+			child[MAX_PATH - 1] = L'\0';
+			if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+				delete_tree (child);
+			} else {
+				SetFileAttributesW (child, FILE_ATTRIBUTE_NORMAL);
+				DeleteFileW (child);
+			}
+		} while (FindNextFileW (find, &fd));
+		FindClose (find);
+	}
+	SetFileAttributesW (path, FILE_ATTRIBUTE_NORMAL);
+	RemoveDirectoryW (path);
+}
+
+static int
+profile_underscores (const wchar_t *name)
+{
+	int n = 0;
+
+	for (; name != NULL && *name != L'\0'; name++) {
+		if (*name == L'_') {
+			n++;
+		}
+	}
+	return n;
+}
+
+/* Drop folders whose owner pid is gone. Legacy wv_<id> has no pid — try
+ * delete; a live msedgewebview2 lock just fails the delete. */
+static void
+sweep_dead_profile_dirs (const wchar_t *profiles_root)
+{
+	WIN32_FIND_DATAW fd;
+	wchar_t glob[MAX_PATH];
+	wchar_t names[64][MAX_PATH];
+	int n_names = 0;
+	int i;
+	HANDLE find;
+	unsigned long pid;
+	unsigned long token;
+	int route;
+
+	if (profiles_root == NULL || profiles_root[0] == L'\0') {
+		return;
+	}
+	_snwprintf (glob, MAX_PATH, L"%s\\wv_*", profiles_root);
+	glob[MAX_PATH - 1] = L'\0';
+	find = FindFirstFileW (glob, &fd);
+	if (find == INVALID_HANDLE_VALUE) {
+		return;
+	}
+	do {
+		if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
+			continue;
+		}
+		if (n_names >= (int) (sizeof (names) / sizeof (names[0]))) {
+			break;
+		}
+		pid = 0;
+		token = 0;
+		route = 0;
+		if (profile_underscores (fd.cFileName) == 3
+		    && swscanf (fd.cFileName, L"wv_%lu_%lu_%d", &pid, &token, &route) == 3) {
+			if (pid == GetCurrentProcessId () || process_still_running ((DWORD) pid)) {
+				continue;
+			}
+		} else if (profile_underscores (fd.cFileName) == 2
+		    && swscanf (fd.cFileName, L"wv_%lu_%d", &pid, &route) == 2) {
+			if (pid == GetCurrentProcessId () || process_still_running ((DWORD) pid)) {
+				continue;
+			}
+		} else if (profile_underscores (fd.cFileName) != 1) {
+			continue;
+		}
+		wcsncpy (names[n_names], fd.cFileName, MAX_PATH);
+		names[n_names][MAX_PATH - 1] = L'\0';
+		n_names++;
+	} while (FindNextFileW (find, &fd));
+	FindClose (find);
+	for (i = 0; i < n_names; i++) {
+		wchar_t child[MAX_PATH];
+
+		_snwprintf (child, MAX_PATH, L"%s\\%s", profiles_root, names[i]);
+		child[MAX_PATH - 1] = L'\0';
+		delete_tree (child);
+	}
+}
+
+static DWORD
+profile_token (void)
+{
+	if (g_profile_token == 0) {
+		g_profile_token = GetTickCount ();
+		if (g_profile_token == 0) {
+			g_profile_token = 1;
+		}
+	}
+	return g_profile_token;
+}
+
+static BOOL
 make_host_user_data_folder (int route_id, wchar_t *out, size_t out_cch)
 {
 	wchar_t base[MAX_PATH];
+	wchar_t profiles[MAX_PATH];
 	DWORD n;
 
 	if (out == NULL || out_cch < 8 || route_id <= 0) {
@@ -89,12 +234,27 @@ make_host_user_data_folder (int route_id, wchar_t *out, size_t out_cch)
 	if (n == 0 || n >= MAX_PATH) {
 		return FALSE;
 	}
-	_snwprintf (out, out_cch, L"%s\\webview2gtk\\profiles\\wv_%d", base, route_id);
+	_snwprintf (profiles, MAX_PATH, L"%s\\webview2gtk\\profiles", base);
+	profiles[MAX_PATH - 1] = L'\0';
+	if (!g_profiles_swept) {
+		g_profiles_swept = TRUE;
+		sweep_dead_profile_dirs (profiles);
+	}
+	/* pid + start tick: never reuse wv_<id>. A leftover browser process
+	 * from the previous run holds that folder and env create hangs. */
+	_snwprintf (
+		out,
+		out_cch,
+		L"%s\\wv_%lu_%lu_%d",
+		profiles,
+		(unsigned long) GetCurrentProcessId (),
+		(unsigned long) profile_token (),
+		route_id
+	);
 	out[out_cch - 1] = L'\0';
 	if (SHCreateDirectoryExW (NULL, out, NULL) != ERROR_SUCCESS
 	    && GetLastError () != ERROR_ALREADY_EXISTS
 	    && GetLastError () != ERROR_FILE_EXISTS) {
-		/* Parent missing — try again after creating webview2gtk\profiles. */
 		SHCreateDirectoryExW (NULL, out, NULL);
 	}
 	return TRUE;
@@ -112,9 +272,10 @@ HRESULT vala_webview2_loader_create_environment_for_host (
 		return E_FAIL;
 	}
 	if (!make_host_user_data_folder (route_id, folder, MAX_PATH)) {
-		fprintf (stderr, "webview2gtk: local host proxy UserDataFolder failed for wv_%d\n", route_id);
+		fprintf (stderr, "webview2gtk: local host proxy UserDataFolder failed for route %d\n", route_id);
 		return E_FAIL;
 	}
+	fprintf (stderr, "webview2gtk: local host proxy UserDataFolder %ls\n", folder);
 	options = vala_webview2_host_create_environment_options_for_route (route_id);
 	hr = g_create_env_with_options (NULL, folder, options, handler);
 	if (options != NULL) {

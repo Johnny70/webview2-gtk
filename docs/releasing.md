@@ -25,7 +25,7 @@ Pushing `vX.Y.Z` triggers [`.github/workflows/release.yml`](../.github/workflows
 
 ## Changelog format
 
-The first section in `CHANGELOG.md` is the current version. It may already be tagged. Use:
+The first section in `CHANGELOG.md` is the current version heading. It may already be tagged — **check `git tag -l vX.Y.Z` before adding work.** If that tag exists, the version is closed: open the next `## [X.Y.Z]` and bump meson / PKGBUILD. Do not keep writing into a tagged release.
 
 ```md
 ## [0.5.2]
@@ -37,4 +37,4 @@ or fill in the date when you remember:
 ## [0.5.2] - 2026-09-16
 ```
 
-Do not use Unreleased. For new work after a release, add a new `## [X.Y.Z]` section at the top.
+Do not use Unreleased.
