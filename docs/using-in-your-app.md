@@ -77,7 +77,7 @@ executable(
 )
 ```
 
-Install the library first: [install.md](install.md). Build your app on each platform locally(Linux → WebKitGTK, Windows → webview2gtk). Staging, pacman, and setup.exe all include the library loopback hop — first `NetworkSession.set_proxy_settings(CUSTOM, …)` before a WebView is shown enables it (no extra meson option).
+Install the library first: [install.md](install.md). Build your app on each platform locally(Linux → WebKitGTK, Windows → webview2gtk). Staging, pacman, and setup.exe all include the library local host proxy — first `NetworkSession.set_proxy_settings(CUSTOM, …)` before a WebView is shown enables it (no extra meson option).
 
 **Alternative:** copy [`scripts/sample-build.sh`](../scripts/sample-build.sh) into your project, edit the settings at the top, then run it under UCRT64(see [build-this-library.md](build-this-library.md)).
 

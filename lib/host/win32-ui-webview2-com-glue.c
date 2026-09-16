@@ -28,7 +28,7 @@ static LONG g_env_creating;
 static WebView2Host *g_env_waiters[8];
 static int g_env_waiter_count;
 static WebView2Host *g_last_host;
-static LONG g_hop_env_count;
+static LONG g_embedded_proxy_env_count;
 static LONG g_next_route_id;
 
 static void
@@ -254,12 +254,12 @@ static HRESULT STDMETHODCALLTYPE env_handler_invoke (
 
 	if (self != NULL && self->host != NULL) {
 		if (FAILED (error_code) || environment == NULL) {
-			fprintf (stderr, "WebView2 hop environment failed: 0x%08lx\n", (unsigned long) error_code);
+			fprintf (stderr, "WebView2 local host proxy environment failed: 0x%08lx\n", (unsigned long) error_code);
 			return error_code;
 		}
 		self->host->env = environment;
 		ICoreWebView2Environment_AddRef (self->host->env);
-		InterlockedIncrement (&g_hop_env_count);
+		InterlockedIncrement (&g_embedded_proxy_env_count);
 		create_controller_for_host (self->host);
 		return S_OK;
 	}
@@ -346,7 +346,7 @@ vala_webview2_com_begin_host (WebView2Host *host, HWND parent, LPCWSTR url, cons
 		);
 		ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler_Release (&env_handler->iface);
 		if (FAILED (hr)) {
-			fprintf (stderr, "CreateCoreWebView2EnvironmentWithOptions (hop) failed: 0x%08lx\n", (unsigned long) hr);
+			fprintf (stderr, "CreateCoreWebView2EnvironmentWithOptions (local host proxy) failed: 0x%08lx\n", (unsigned long) hr);
 			return FALSE;
 		}
 		return TRUE;
@@ -564,7 +564,7 @@ vala_webview2_com_get_environment (void)
 bool
 vala_webview2_com_has_any_environment (void)
 {
-	return g_env != NULL || InterlockedCompareExchange (&g_hop_env_count, 0, 0) > 0;
+	return g_env != NULL || InterlockedCompareExchange (&g_embedded_proxy_env_count, 0, 0) > 0;
 }
 
 int
@@ -646,7 +646,7 @@ vala_webview2_com_release_host (WebView2Host *host)
 	if (host->env != NULL) {
 		ICoreWebView2Environment_Release (host->env);
 		host->env = NULL;
-		InterlockedDecrement (&g_hop_env_count);
+		InterlockedDecrement (&g_embedded_proxy_env_count);
 	} else {
 		left = InterlockedDecrement (&g_env_refcount);
 		if (left <= 0 && g_env != NULL) {

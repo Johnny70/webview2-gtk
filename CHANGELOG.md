@@ -5,8 +5,23 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+Headings are `## [X.Y.Z]` or `## [X.Y.Z] - YYYY-MM-DD`. Do not use Unreleased — the top section may already be tagged; add a new version section for new work and fill in the date later.
 
-## [0.6.1] - Unreleased
+## [0.6.2]
+
+### Added
+
+- `examples/add-cookie --smoke-proxy-direct`: dummy local host proxy before the first WebView, then example.com must paint (consumer pass-through).
+
+### Fixed
+
+- Local host proxy grey screen: `incoming` must return `true`; Chromium `--proxy-server` is `http://127.0.0.1:<port>` (no `id@` userinfo — that URI never CONNECTs); no `Proxy-Authorization` / no table row is pass-through ([bug](docs/bugs/done/2026-09-16-localhost-proxy-first-connect-502.md)).
+
+### Changed
+
+- `--proxy-server` no longer embeds a view id in the proxy URI (Chromium does not send `Proxy-Authorization` for `http://id@127.0.0.1:port`).
+
+## [0.6.1] - 2026-09-16
 
 ### Added
 
@@ -15,19 +30,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Duplicate `wv2_host_embedded_proxy_active` extern (vala compile) and `inet.port` (`uint` → `uint16`) assignment.
-- Valadoc: hop / dummy URIs use `[[http://…]]` wiki links so `http://` in `''…''` no longer fails the docs job.
+- Valadoc: local host proxy / dummy URIs use `[[http://…]]` wiki links so `http://` in `''…''` no longer fails the docs job.
 
 ## [0.6.0] - 2026-09-15
 
 ### Added
 
-- Library loopback CONNECT hop (always linked; no meson flag). First `NetworkSession.set_proxy_settings(CUSTOM, …)` before any WebView is shown starts a listen thread; every later view gets its own Environment + `UserDataFolder` (`%LOCALAPPDATA%\webview2gtk\profiles\wv_<id>`) and `--proxy-server=http://<id>@127.0.0.1:<port>`. Dummy `http://127.0.0.1` (optional `:port`) is pass-through; any other URI is a live per-session relay ([plan 6.0](docs/plans/done/6.0-embedded-proxy.md)).
+- Library local host CONNECT proxy (always linked; no meson flag). First `NetworkSession.set_proxy_settings(CUSTOM, …)` before any WebView is shown starts a listen thread; every later view gets its own Environment + `UserDataFolder` (`%LOCALAPPDATA%\webview2gtk\profiles\wv_<id>`) and `--proxy-server=http://<id>@127.0.0.1:<port>`. Dummy `http://127.0.0.1` (optional `:port`) is pass-through; any other URI is a live per-session relay ([plan 6.0](docs/plans/done/6.0-embedded-proxy.md)).
 
 ### Changed
 
-- `set_proxy_settings(CUSTOM)` after a shared (non-hop) environment already exists warns and does not latch a process-wide Chromium `--proxy-server=<uri>` (supersedes the unreleased 5.0 latch).
+- `set_proxy_settings(CUSTOM)` after a shared environment (no local host proxy) already exists warns and does not latch a process-wide Chromium `--proxy-server=<uri>` (supersedes the unreleased 5.0 latch).
 - `--smoke-proxy` uses `http://192.0.2.1:1` (TEST-NET). Loopback is the pass-through sentinel.
-- README / automation.md: hop + per-view routing is the supported Windows proxy story.
+- README / automation.md: local host proxy + per-view routing is the supported Windows proxy story.
 
 ## [0.5.13] - 2026-09-10
 
@@ -218,4 +233,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Prior releases (`v0.1.x` … `v0.3.3`) were published without a changelog in-tree.
 Summaries live in [GitHub Releases](https://github.com/roojs/webview2-gtk/releases) and the plans under `docs/plans/done/` (script messages 2.0, downloads 1.1, a11y 1.0, pacman signatures 0.3, …).
 
-From this file onward, each tagged release should move `[Unreleased]` into a dated section before tagging.
+From this file onward, add a new `## [X.Y.Z]` section for new work and fill in the date when you remember.

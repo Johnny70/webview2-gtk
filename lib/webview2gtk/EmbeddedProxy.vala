@@ -8,27 +8,27 @@ namespace WebView2Gtk
 {
 
 	/**
-	 * Library loopback HTTP CONNECT hop (plan 6.0).
+	 * Library local host HTTP CONNECT proxy (plan 6.0).
 	 *
-	 * Port of the consumer CONNECT / forward server: own thread +
-	 * ''GLib.MainContext''. Routes are per view id (Proxy-Authorization)
-	 * instead of per host; GTK posts via ''context.invoke''. Dummy
-	 * [[http://127.0.0.1]] CUSTOM is pass-through, not an upstream.
+	 * Port of the consumer CONNECT / forward server: listen thread starts
+	 * first. One route table lives on that thread; GTK posts a one-line
+	 * change with ''context.invoke''. Per view id (Proxy-Authorization).
+	 * No row (and dummy [[http://127.0.0.1]]) is pass-through: connect out,
+	 * no extra upstream. ''about:'' is answered without a table lookup.
 	 */
 	internal class EmbeddedProxy : Object
 	{
 		private static EmbeddedProxy? instance = null;
-		private static Mutex start_mutex;
+		private static GLib.Mutex start_mutex;
 
 		private uint16 port = 0;
-		private Thread<void*>? thread = null;
-		private MainContext? context = null;
-		private MainLoop? loop = null;
-		private SocketService? service = null;
+		private GLib.Thread<void*>? thread = null;
+		private GLib.MainContext? context = null;
+		private GLib.MainLoop? loop = null;
+		private GLib.SocketService? service = null;
 		private Gee.HashMap<int, string> routes { get; set; default = new Gee.HashMap<int, string>(); }
-		private Gee.HashMap<int, string> pending { get; set; default = new Gee.HashMap<int, string>(); }
-		private Mutex wait_mutex = Mutex();
-		private Cond wait_cond = Cond();
+		private GLib.Mutex wait_mutex = GLib.Mutex();
+		private GLib.Cond wait_cond = GLib.Cond();
 		private bool listen_done = false;
 		private bool listen_ok = false;
 
@@ -50,7 +50,7 @@ namespace WebView2Gtk
 				return false;
 			}
 			var proxy = new EmbeddedProxy();
-			proxy.thread = new Thread<void*>("webview2gtk-proxy", proxy.thread_main);
+			proxy.thread = new GLib.Thread<void*>("webview2gtk-proxy", proxy.thread_main);
 			proxy.wait_mutex.lock();
 			while (!proxy.listen_done) {
 				proxy.wait_cond.wait(proxy.wait_mutex);
@@ -67,62 +67,50 @@ namespace WebView2Gtk
 			return true;
 		}
 
-		/* Empty string = DIRECT. Null = drop the row (fail-closed). */
+		/* Empty string = pass-through. Null = drop the row (pass-through). */
 		internal static void set_upstream(int id, string? proxy_uri)
 		{
-			if (id <= 0 || instance == null) {
+			if (id <= 0 || instance == null || instance.context == null) {
 				return;
 			}
-			var ctx = instance.context;
-			if (ctx == null) {
-				if (proxy_uri == null) {
-					instance.pending.unset(id);
-				} else {
-					instance.pending[id] = proxy_uri;
-				}
-				return;
-			}
-			ctx.invoke(() => {
+			instance.context.invoke(() => {
 				if (proxy_uri == null) {
 					instance.routes.unset(id);
 				} else {
 					instance.routes[id] = proxy_uri;
 				}
-				return Source.REMOVE;
+				return GLib.Source.REMOVE;
 			});
 		}
 
 		private void* thread_main()
 		{
-			this.context = new MainContext();
+			this.context = new GLib.MainContext();
 			this.context.push_thread_default();
-			this.loop = new MainLoop(this.context, false);
+			this.loop = new GLib.MainLoop(this.context, false);
 			try {
-				this.service = new SocketService();
-				SocketAddress effective;
+				this.service = new GLib.SocketService();
+				GLib.SocketAddress effective;
 				this.service.add_address(
-					new InetSocketAddress(new InetAddress.loopback(SocketFamily.IPV4), 0),
-					SocketType.STREAM,
-					SocketProtocol.TCP,
+					new GLib.InetSocketAddress(new GLib.InetAddress.loopback(GLib.SocketFamily.IPV4), 0),
+					GLib.SocketType.STREAM,
+					GLib.SocketProtocol.TCP,
 					null,
 					out effective
 				);
-				var inet = effective as InetSocketAddress;
+				var inet = effective as GLib.InetSocketAddress;
 				if (inet == null || inet.port == 0) {
-					throw new IOError.FAILED("loopback bind did not return a port");
+					throw new GLib.IOError.FAILED("localhost bind did not return a port");
 				}
 				this.port = (uint16) inet.port;
-				foreach (var id in this.pending.keys) {
-					this.routes[id] = this.pending[id];
-				}
-				this.pending.clear();
 				this.service.incoming.connect((connection) => {
+					GLib.debug("webview2gtk: proxy incoming");
 					this.serve.begin(connection);
-					return false;
+					return true;
 				});
 				this.service.start();
-			} catch (Error listen_error) {
-				warning("WebView2Gtk: embedded proxy listen failed: %s", listen_error.message);
+			} catch (GLib.Error listen_error) {
+				GLib.warning("WebView2Gtk: local host proxy listen failed: %s", listen_error.message);
 				this.wait_mutex.lock();
 				this.listen_ok = false;
 				this.listen_done = true;
@@ -136,21 +124,22 @@ namespace WebView2Gtk
 			this.listen_done = true;
 			this.wait_cond.signal();
 			this.wait_mutex.unlock();
-			message("webview2gtk: embedded proxy listening http://127.0.0.1:%u", this.port);
+			GLib.message("webview2gtk: local host proxy listening http://127.0.0.1:%u", this.port);
 			this.loop.run();
 			this.context.pop_thread_default();
 			return null;
 		}
 
-		private async void serve(SocketConnection client)
+		private async void serve(GLib.SocketConnection client)
 		{
 			try {
-				var client_in = new DataInputStream(client.input_stream);
+				var client_in = new GLib.DataInputStream(client.input_stream);
 				client_in.close_base_stream = false;
-				client_in.set_newline_type(DataStreamNewlineType.ANY);
+				client_in.set_newline_type(GLib.DataStreamNewlineType.ANY);
 				client_in.set_buffer_size(65536);
 				var head = yield this.read_head(client_in);
 				if (head.length == 0) {
+					GLib.debug("webview2gtk: proxy empty request");
 					client.close();
 					return;
 				}
@@ -161,11 +150,14 @@ namespace WebView2Gtk
 				}
 				var parts = head.substring(0, first_nl).split(" ", 3);
 				if (parts.length < 2) {
+					GLib.debug("webview2gtk: proxy short request line");
 					client.close();
 					return;
 				}
+				GLib.debug("webview2gtk: proxy req %s %s", parts[0], parts[1]);
 
 				var view_id = 0;
+				var saw_proxy_auth = false;
 				var hdr_lines = head.split("\r\n");
 				for (var i = 1; i < hdr_lines.length; i++) {
 					if (hdr_lines[i] == "") {
@@ -178,12 +170,13 @@ namespace WebView2Gtk
 					if (hdr_lines[i].substring(0, name_end).strip().down() != "proxy-authorization") {
 						continue;
 					}
+					saw_proxy_auth = true;
 					var raw = hdr_lines[i].substring(name_end + 1).strip();
 					var auth = raw.split(" ", 2);
 					if (auth.length < 2 || auth[0].down() != "basic") {
 						break;
 					}
-					var decoded = (string) Base64.decode(auth[1].strip());
+					var decoded = (string) GLib.Base64.decode(auth[1].strip());
 					var colon = decoded.index_of_char(':');
 					var id_text = decoded;
 					if (colon >= 0) {
@@ -193,19 +186,25 @@ namespace WebView2Gtk
 					break;
 				}
 				if (view_id <= 0) {
-					var need_auth = "HTTP/1.1 407 Proxy Authentication Required\r\nConnection: close\r\n\r\n";
-					client.output_stream.write_all(need_auth.data[0:need_auth.length], null);
-					client.close();
-					return;
+					GLib.debug("webview2gtk: proxy no auth %s %s (pass-through)",
+						parts[0], parts[1]);
 				}
-				if (!this.routes.has_key(view_id)) {
-					var bad_gw = "HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n";
-					client.output_stream.write_all(bad_gw.data[0:bad_gw.length], null);
+				if (parts[1].down().has_prefix("about:")) {
+					string about_ok;
+					if (parts[0].up() == "CONNECT") {
+						about_ok = "HTTP/1.1 200 Connection Established\r\n\r\n";
+					} else {
+						about_ok = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+					}
+					client.output_stream.write_all(about_ok.data[0:about_ok.length], null);
 					client.close();
+					GLib.debug("webview2gtk: proxy about: id=%d %s %s", view_id, parts[0], parts[1]);
 					return;
 				}
 
 				if (parts[0].up() == "CONNECT") {
+					GLib.debug("webview2gtk: proxy CONNECT id=%d %s row=%s",
+						view_id, parts[1], this.routes.has_key(view_id) ? "yes" : "no");
 					yield this.tunnel_connect(client, parts[1], view_id);
 					return;
 				}
@@ -242,24 +241,26 @@ namespace WebView2Gtk
 					client.close();
 					return;
 				}
+				GLib.debug("webview2gtk: proxy HTTP id=%d %s %s row=%s",
+					view_id, parts[0], target, this.routes.has_key(view_id) ? "yes" : "no");
 				yield this.forward_http(client.output_stream, client_in, parts[0], target,
 					head, view_id);
 				client.close();
-			} catch (Error serve_error) {
-				debug("%s", serve_error.message);
+			} catch (GLib.Error serve_error) {
+				GLib.debug("webview2gtk: proxy serve: %s", serve_error.message);
 				try {
 					client.close();
-				} catch (Error close_error) {
+				} catch (GLib.Error close_error) {
 				}
 			}
 		}
 
-		private async string read_head(DataInputStream stream) throws Error
+		private async string read_head(GLib.DataInputStream stream) throws GLib.Error
 		{
-			var head = new StringBuilder();
+			var head = new GLib.StringBuilder();
 			while (true) {
 				size_t length;
-				var line = yield stream.read_line_utf8_async(Priority.DEFAULT, null, out length);
+				var line = yield stream.read_line_utf8_async(GLib.Priority.DEFAULT, null, out length);
 				if (line == null) {
 					return head.str;
 				}
@@ -274,10 +275,10 @@ namespace WebView2Gtk
 		 * CONNECT tunnel: optional upstream CONNECT, then byte pipe.
 		 */
 		private async void tunnel_connect(
-			SocketConnection client,
+			GLib.SocketConnection client,
 			string host_port,
 			int view_id
-		) throws Error
+		) throws GLib.Error
 		{
 			var host = host_port;
 			var port = 443;
@@ -287,33 +288,33 @@ namespace WebView2Gtk
 				port = int.parse(host_port.substring(colon + 1));
 			}
 
-			SocketConnection remote;
+			GLib.SocketConnection remote;
 			try {
 				remote = yield this.open_far(host, (uint16) port, host_port, view_id);
-			} catch (Error connect_error) {
+			} catch (GLib.Error connect_error) {
 				var bad = "HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n";
 				client.output_stream.write_all(bad.data[0:bad.length], null);
 				client.close();
-				debug("%s", connect_error.message);
+				GLib.debug("webview2gtk: proxy CONNECT 502 %s: %s", host_port, connect_error.message);
 				return;
 			}
 
 			var established = "HTTP/1.1 200 Connection Established\r\n\r\n";
 			client.output_stream.write_all(established.data[0:established.length], null);
 
-			var cancel = new Cancellable();
+			var cancel = new GLib.Cancellable();
 			var pending_splices = 2;
-			SourceFunc resume = () => {
+			GLib.SourceFunc resume = () => {
 				tunnel_connect.callback();
-				return Source.REMOVE;
+				return GLib.Source.REMOVE;
 			};
 			remote.output_stream.splice_async.begin(
 				client.input_stream,
-				OutputStreamSpliceFlags.NONE,
-				Priority.DEFAULT, cancel, (o, res) => {
+				GLib.OutputStreamSpliceFlags.NONE,
+				GLib.Priority.DEFAULT, cancel, (o, res) => {
 					try {
 						remote.output_stream.splice_async.end(res);
-					} catch (Error e) {
+					} catch (GLib.Error e) {
 					}
 					cancel.cancel();
 					pending_splices--;
@@ -323,11 +324,11 @@ namespace WebView2Gtk
 				});
 			client.output_stream.splice_async.begin(
 				remote.input_stream,
-				OutputStreamSpliceFlags.NONE,
-				Priority.DEFAULT, cancel, (o, res) => {
+				GLib.OutputStreamSpliceFlags.NONE,
+				GLib.Priority.DEFAULT, cancel, (o, res) => {
 					try {
 						client.output_stream.splice_async.end(res);
-					} catch (Error e) {
+					} catch (GLib.Error e) {
 					}
 					cancel.cancel();
 					pending_splices--;
@@ -338,26 +339,26 @@ namespace WebView2Gtk
 			yield;
 			try {
 				client.close();
-			} catch (Error close_client) {
+			} catch (GLib.Error close_client) {
 			}
 			try {
 				remote.close();
-			} catch (Error close_remote) {
+			} catch (GLib.Error close_remote) {
 			}
 		}
 
 		/**
 		 * Forward one HTTP request (absolute-form, or origin-form already
-		 * rewritten to [[http://host/path]]). Optional upstream hop.
+		 * rewritten to [[http://host/path]]). Optional upstream.
 		 */
 		private async void forward_http(
-			OutputStream client_out,
-			DataInputStream client_in,
+			GLib.OutputStream client_out,
+			GLib.DataInputStream client_in,
 			string method,
 			string absolute_uri,
 			string head,
 			int view_id
-		) throws Error
+		) throws GLib.Error
 		{
 			var without_scheme = absolute_uri.substring(7);
 			var slash = without_scheme.index_of_char('/');
@@ -375,12 +376,15 @@ namespace WebView2Gtk
 				dest_port = int.parse(host_port.substring(colon + 1));
 			}
 
-			var upstream = this.routes[view_id];
+			var upstream = "";
+			if (this.routes.has_key(view_id)) {
+				upstream = this.routes[view_id];
+			}
 			var req_target = path;
 			if (upstream != "") {
 				req_target = absolute_uri;
 			}
-			var out_head = new StringBuilder();
+			var out_head = new GLib.StringBuilder();
 			out_head.append_printf("%s %s HTTP/1.1\r\n", method, req_target);
 			var has_host = false;
 			var content_length = 0;
@@ -414,45 +418,48 @@ namespace WebView2Gtk
 			var body = new uint8[content_length];
 			if (content_length > 0) {
 				size_t n_read;
-				yield client_in.read_all_async(body, Priority.DEFAULT, null, out n_read);
+				yield client_in.read_all_async(body, GLib.Priority.DEFAULT, null, out n_read);
 			}
 
-			SocketConnection remote;
+			GLib.SocketConnection remote;
 			if (upstream != "") {
 				remote = yield this.connect_upstream(upstream);
 			} else {
-				remote = yield new SocketClient().connect_to_host_async(host, (uint16) dest_port, null);
+				remote = yield new GLib.SocketClient().connect_to_host_async(host, (uint16) dest_port, null);
 			}
 			remote.output_stream.write_all(out_head.str.data[0:out_head.len], null);
 			if (content_length > 0) {
 				remote.output_stream.write_all(body, null);
 			}
 			yield client_out.splice_async(remote.input_stream,
-				OutputStreamSpliceFlags.CLOSE_SOURCE | OutputStreamSpliceFlags.CLOSE_TARGET,
-				Priority.DEFAULT, null);
+				GLib.OutputStreamSpliceFlags.CLOSE_SOURCE | GLib.OutputStreamSpliceFlags.CLOSE_TARGET,
+				GLib.Priority.DEFAULT, null);
 		}
 
 		/**
 		 * Open TCP to host:port, or CONNECT via mapped upstream.
 		 */
-		private async SocketConnection open_far(
+		private async GLib.SocketConnection open_far(
 			string host,
 			uint16 dest_port,
 			string host_port,
 			int view_id
-		) throws Error
+		) throws GLib.Error
 		{
-			var upstream = this.routes[view_id];
+			var upstream = "";
+			if (this.routes.has_key(view_id)) {
+				upstream = this.routes[view_id];
+			}
 			if (upstream == "") {
-				return yield new SocketClient().connect_to_host_async(host, dest_port, null);
+				return yield new GLib.SocketClient().connect_to_host_async(host, dest_port, null);
 			}
 			var remote = yield this.connect_upstream(upstream);
 			var req = ("CONNECT %s HTTP/1.1\r\nHost: %s\r\n"
 				+ "Proxy-Connection: keep-alive\r\n\r\n").printf(host_port, host_port);
 			remote.output_stream.write_all(req.data[0:req.length], null);
-			var remote_in = new DataInputStream(remote.input_stream);
+			var remote_in = new GLib.DataInputStream(remote.input_stream);
 			remote_in.close_base_stream = false;
-			remote_in.set_newline_type(DataStreamNewlineType.ANY);
+			remote_in.set_newline_type(GLib.DataStreamNewlineType.ANY);
 			remote_in.set_buffer_size(65536);
 			var resp = yield this.read_head(remote_in);
 			var status_nl = resp.index_of("\r\n");
@@ -461,23 +468,23 @@ namespace WebView2Gtk
 				status = resp.substring(0, status_nl);
 			}
 			if (!status.contains(" 200")) {
-				throw new IOError.FAILED("upstream CONNECT failed: %s", status);
+				throw new GLib.IOError.FAILED("upstream CONNECT failed: %s", status);
 			}
 			return remote;
 		}
 
-		private async SocketConnection connect_upstream(string proxy_uri) throws Error
+		private async GLib.SocketConnection connect_upstream(string proxy_uri) throws GLib.Error
 		{
-			var parsed = Uri.parse(proxy_uri, UriFlags.NONE);
+			var parsed = GLib.Uri.parse(proxy_uri, GLib.UriFlags.NONE);
 			var up_host = parsed.get_host() ?? "";
 			if (up_host == "") {
-				throw new IOError.FAILED("upstream missing host: %s", proxy_uri);
+				throw new GLib.IOError.FAILED("upstream missing host: %s", proxy_uri);
 			}
 			var up_port = parsed.get_port();
 			if (up_port < 0) {
 				up_port = 80;
 			}
-			return yield new SocketClient().connect_to_host_async(up_host, (uint16) up_port, null);
+			return yield new GLib.SocketClient().connect_to_host_async(up_host, (uint16) up_port, null);
 		}
 
 	}

@@ -100,7 +100,7 @@ The API **looks** like WebKitGTK; several behaviors do **not**. Read these befor
 
 On **WebKitGTK**, `set_proxy_settings` applies to that `NetworkSession` and can change while the session is live.
 
-On **Windows**, the first `CUSTOM` **before** any WebView is shown starts a library loopback CONNECT hop. Every later view gets its own Environment + `UserDataFolder` pointed at `http://<id>@127.0.0.1:<port>`. Dummy `http://127.0.0.1` (optional `:port`) is pass-through; any other URI is a live relay for that session. `CUSTOM` after a shared (non-hop) environment already exists is an error. Never calling `CUSTOM` keeps the shared environment (no hop). Details and smoke: [automation.md](docs/automation.md).
+On **Windows**, the first `CUSTOM` **before** any WebView is shown starts a library local host CONNECT proxy. Every later view gets its own Environment + `UserDataFolder` pointed at `http://127.0.0.1:<port>`. Dummy `http://127.0.0.1` (optional `:port`), no `Proxy-Authorization`, and no table row are pass-through; any other CUSTOM URI is a live relay for that session. `CUSTOM` after a shared environment (no local host proxy) already exists is an error. Never calling `CUSTOM` keeps the shared environment (no local host proxy). Details and smoke: [automation.md](docs/automation.md).
 
 ### Other create-time Chromium flags
 
@@ -114,7 +114,7 @@ Same “set before first attach” class as proxy (not live mid-session toggles 
 
 ### Process / profile scope
 
-Each GTK `WebView` owns its own WebView2 **controller**. Without the hop they share one **Environment** (cookie profile and CDP stay process-scoped). After `CUSTOM` starts the hop, each view has its own Environment and profile folder; TEXT cookie jars stay session-level.
+Each GTK `WebView` owns its own WebView2 **controller**. Without the local host proxy they share one **Environment** (cookie profile and CDP stay process-scoped). After `CUSTOM` starts the local host proxy, each view has its own Environment and profile folder; TEXT cookie jars stay session-level.
 
 `CookieManager.set_persistent_storage(SQLITE)` is not supported (`GLib.error`); `TEXT` path jars work. Page-driven Set-Cookie is not mirrored into `CookieManager.changed` the way a full WebKit jar observer might.
 

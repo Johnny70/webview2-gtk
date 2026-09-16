@@ -80,12 +80,12 @@ Set **before** the WebView2 environment is created (before first present/attach)
 
 ### HTTP(S) proxy (`NetworkSession.set_proxy_settings`)
 
-First `CUSTOM` **before** the first WebView is shown starts the library loopback
-hop. Later calls store a route on that `NetworkSession` and post it to the hop
-thread when the view is bound (live; no env recreate).
+First `CUSTOM` **before** the first WebView is shown starts the library local
+host proxy. Later calls store a route on that `NetworkSession` and post it to
+the proxy thread when the view is bound (live; no env recreate).
 
 ```vala
-/* Before any window — start hop, pass-through */
+/* Before any window — start the local host proxy, pass-through */
 var session = new NetworkSession(null, null);
 session.set_proxy_settings(
 	NetworkProxyMode.CUSTOM,
@@ -98,22 +98,23 @@ web.network_session.set_proxy_settings(
 );
 ```
 
-| CUSTOM URI | Hop |
-|------------|-----|
+| CUSTOM URI | Local host proxy |
+|------------|------------------|
 | `http://127.0.0.1` (optional `:port`) | Pass-through (DIRECT) |
 | Other host | Relay that session through the URI |
 
 `CUSTOM` after a shared environment already exists errors. Never calling
 `CUSTOM` keeps one shared environment (no listen thread). Staging / pacman /
-setup.exe all include the hop — no extra meson option.
+setup.exe all include the local host proxy — no extra meson option.
 
 Smoke:
 
 ```powershell
+& 'C:\msys64\tmp\webview2-gtk\portable-demos\webview2gtk-add-cookie.exe' --smoke-proxy-direct
 & 'C:\msys64\tmp\webview2-gtk\portable-demos\webview2gtk-add-cookie.exe' --smoke-proxy
 ```
 
-Pass: `TEST_PASS` (CUSTOM to `http://192.0.2.1:1` fails closed — no “Example Domain”).
+Pass: `--smoke-proxy-direct` `TEST_PASS` (dummy local host proxy, example.com paints). `--smoke-proxy` `TEST_PASS` (CUSTOM to `http://192.0.2.1:1` fails closed — no “Example Domain”).
 
 ## Demo and smokes
 

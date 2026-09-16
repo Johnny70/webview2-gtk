@@ -4,7 +4,7 @@ This repo's release flow is **tag-driven**.
 
 ## What `scripts/release.sh` does
 
-- reads the first `CHANGELOG.md` section and expects `## [X.Y.Z] - Unreleased`
+- reads the first `CHANGELOG.md` section (`## [X.Y.Z]` or `## [X.Y.Z] - YYYY-MM-DD`)
 - prints the notes that will become the GitHub Release body
 - refuses to run on a dirty working tree
 - refuses to reuse an existing local or remote tag unless you pass `--retry`
@@ -25,10 +25,16 @@ Pushing `vX.Y.Z` triggers [`.github/workflows/release.yml`](../.github/workflows
 
 ## Changelog format
 
-Before releasing, the first section in `CHANGELOG.md` must look like:
+The first section in `CHANGELOG.md` is the current version. It may already be tagged. Use:
 
 ```md
-## [0.5.2] - Unreleased
+## [0.5.2]
 ```
 
-After the tag lands, convert that section to a dated entry and add a fresh `## [Unreleased]` section for the next cycle.
+or fill in the date when you remember:
+
+```md
+## [0.5.2] - 2026-09-16
+```
+
+Do not use Unreleased. For new work after a release, add a new `## [X.Y.Z]` section at the top.

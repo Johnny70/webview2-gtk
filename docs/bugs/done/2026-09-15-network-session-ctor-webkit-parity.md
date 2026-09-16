@@ -11,11 +11,11 @@
 ## Symptom
 
 Shared apps call the WebKit-shaped bootstrap **before** the first `WebView`
-exists (required so the first `CUSTOM` can start the library hop):
+exists (required so the first `CUSTOM` can start the local host proxy):
 
 ```vala
-var hop = new NetworkSession(null, null);
-hop.set_proxy_settings(
+var session = new NetworkSession(null, null);
+session.set_proxy_settings(
 	NetworkProxyMode.CUSTOM,
 	new NetworkProxySettings("http://127.0.0.1", null)
 );
@@ -71,4 +71,4 @@ Replace the no-arg ctor with the two-arg WebKit-shaped signature (defaults
 1. `new NetworkSession(null, null)` compiles against webview2-gtk.
 2. `new NetworkSession()` still compiles (defaults).
 3. First `set_proxy_settings(CUSTOM, http://127.0.0.1)` on that session before
-   any WebView still starts the hop (`--smoke-proxy` / hop ensure path).
+   any WebView still starts the local host proxy (`--smoke-proxy`).

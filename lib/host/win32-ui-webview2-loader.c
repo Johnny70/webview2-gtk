@@ -112,7 +112,7 @@ HRESULT vala_webview2_loader_create_environment_for_host (
 		return E_FAIL;
 	}
 	if (!make_host_user_data_folder (route_id, folder, MAX_PATH)) {
-		fprintf (stderr, "webview2gtk: hop UserDataFolder failed for wv_%d\n", route_id);
+		fprintf (stderr, "webview2gtk: local host proxy UserDataFolder failed for wv_%d\n", route_id);
 		return E_FAIL;
 	}
 	options = vala_webview2_host_create_environment_options_for_route (route_id);

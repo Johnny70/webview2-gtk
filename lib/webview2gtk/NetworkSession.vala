@@ -287,11 +287,12 @@ public class NetworkSession : Object {
 	 * WebKitGTK-shaped — set HTTP(S) proxy for this session.
 	 *
 	 * On Windows, the first ''CUSTOM'' before any WebView is shown starts the
-	 * library loopback hop and every later view’s environment points at it
-	 * ([[http://id@127.0.0.1:port]]). Dummy [[http://127.0.0.1]] is
-	 * pass-through. A non-loopback URI is a live relay for this session.
-	 * ''CUSTOM'' after a shared (non-hop) environment already exists is an
-	 * error.
+	 * library local host proxy and every later view’s environment points at it
+	 * ([[http://127.0.0.1:port]]). Dummy [[http://127.0.0.1]], no
+	 * Proxy-Authorization, and no table row are pass-through. Any other URI
+	 * is a live relay for this session.
+	 * ''CUSTOM'' after a shared environment (no local host proxy) already
+	 * exists is an error.
 	 */
 	public void set_proxy_settings(
 		NetworkProxyMode mode,
@@ -299,7 +300,7 @@ public class NetworkSession : Object {
 	) {
 		if (mode == NetworkProxyMode.CUSTOM && !EmbeddedProxy.ensure()) {
 			warning(
-				"WebView2Gtk: set_proxy_settings(CUSTOM) requires enabling the library proxy before the first WebView attaches"
+				"WebView2Gtk: set_proxy_settings(CUSTOM) requires enabling the local host proxy before the first WebView attaches"
 			);
 			return;
 		}

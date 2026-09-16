@@ -13,7 +13,7 @@
 #include "win32-ui-webview2-proxy.h"
 #include "win32-ui-webview2-sdk.h"
 
-static BOOL g_hop_cdp_used = FALSE;
+static BOOL g_localhost_proxy_cdp_used = FALSE;
 
 static BOOL g_automation_allowed = FALSE;
 /* 0=ALLOW, 1=ALLOW_WITHOUT_SOUND, 2=DENY — match WebView2Gtk.AutoplayPolicy */
@@ -318,37 +318,37 @@ ICoreWebView2EnvironmentOptions *
 vala_webview2_host_create_environment_options_for_route (int route_id)
 {
 	unsigned port;
-	unsigned hop_port;
+	unsigned proxy_port;
 	EnvOptions *opt;
 	wchar_t args[768];
 	size_t used = 0;
 	size_t cap;
 	BOOL need_deny;
 	BOOL need_hide_webdriver;
-	BOOL need_hop_proxy;
+	BOOL need_localhost_proxy;
 	BOOL need_no_proxy;
 	BOOL emit_cdp;
 
 	cap = sizeof (args) / sizeof (args[0]);
 	port = parse_inspector_port ();
-	hop_port = vala_webview2_host_embedded_proxy_port ();
+	proxy_port = vala_webview2_host_embedded_proxy_port ();
 	need_deny = (g_autoplay_policy == 2); /* DENY */
 	need_hide_webdriver = (g_navigator_webdriver_policy == 2); /* DISABLED */
-	need_hop_proxy = (
+	need_localhost_proxy = (
 		vala_webview2_host_embedded_proxy_active ()
 		&& route_id > 0
-		&& hop_port > 0
+		&& proxy_port > 0
 	);
 	need_no_proxy = (
 		!vala_webview2_host_embedded_proxy_active ()
 		&& g_proxy_mode == 2
 	);
 	emit_cdp = (port != 0);
-	if (need_hop_proxy && g_hop_cdp_used) {
+	if (need_localhost_proxy && g_localhost_proxy_cdp_used) {
 		emit_cdp = FALSE;
 	}
 	if (!emit_cdp && !need_deny && !need_hide_webdriver
-	    && !need_hop_proxy && !need_no_proxy) {
+	    && !need_localhost_proxy && !need_no_proxy) {
 		return NULL;
 	}
 
@@ -373,8 +373,8 @@ vala_webview2_host_create_environment_options_for_route (int route_id)
 			used = cap - 1;
 		}
 		args[used] = L'\0';
-		if (need_hop_proxy) {
-			g_hop_cdp_used = TRUE;
+		if (need_localhost_proxy) {
+			g_localhost_proxy_cdp_used = TRUE;
 		}
 		fprintf (
 			stderr,
@@ -416,7 +416,7 @@ vala_webview2_host_create_environment_options_for_route (int route_id)
 			"webview2gtk: navigator.webdriver DISABLED (--disable-blink-features=AutomationControlled)\n"
 		);
 	}
-	if (need_hop_proxy) {
+	if (need_localhost_proxy) {
 		if (used > 0 && used + 1 < cap) {
 			args[used++] = L' ';
 			args[used] = L'\0';
@@ -424,17 +424,16 @@ vala_webview2_host_create_environment_options_for_route (int route_id)
 		_snwprintf (
 			args + used,
 			cap - used,
-			L"--proxy-server=http://%d@127.0.0.1:%u",
-			route_id,
-			hop_port
+			L"--proxy-server=http://127.0.0.1:%u",
+			proxy_port
 		);
 		args[cap - 1] = L'\0';
 		used = wcslen (args);
 		fprintf (
 			stderr,
-			"webview2gtk: hop --proxy-server=http://%d@127.0.0.1:%u\n",
-			route_id,
-			hop_port
+			"webview2gtk: local host proxy --proxy-server=http://127.0.0.1:%u (id=%d)\n",
+			proxy_port,
+			route_id
 		);
 	} else if (need_no_proxy) {
 		if (used > 0 && used + 1 < cap) {

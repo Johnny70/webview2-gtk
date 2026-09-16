@@ -28,6 +28,7 @@ run_one() {
 @echo off
 set LOG=%LOCALAPPDATA%\\Temp\\$(basename "${log}")
 cd /d C:\\msys64\\tmp\\webview2-gtk\\portable-demos
+set G_MESSAGES_DEBUG=all
 set "FONTCONFIG_FILE=%~dp0etc\\fonts\\fonts.conf"
 set "XDG_DATA_DIRS=%~dp0share"
 echo starting > "%LOG%"
@@ -64,17 +65,31 @@ LOG_MIRROR=/c/Users/Alan/AppData/Local/Temp/webview2gtk-add-cookie-mirror-smoke.
 LOG_CHANGED=/c/Users/Alan/AppData/Local/Temp/webview2gtk-add-cookie-changed-smoke.log
 LOG_REPLACE=/c/Users/Alan/AppData/Local/Temp/webview2gtk-add-cookie-replace-startup-smoke.log
 LOG_PERSIST=/c/Users/Alan/AppData/Local/Temp/webview2gtk-add-cookie-persist-smoke.log
+LOG_PROXY=/c/Users/Alan/AppData/Local/Temp/webview2gtk-add-cookie-proxy-smoke.log
+LOG_PROXY_DIRECT=/c/Users/Alan/AppData/Local/Temp/webview2gtk-add-cookie-proxy-direct-smoke.log
 fail=0
-run_one --smoke WebView2GtkAddCookieSmoke "${LOG_ATTACH}" \
-	"${OUT_DIR}/run-add-cookie-smoke.bat" || fail=1
-run_one --smoke-mirror WebView2GtkAddCookieMirrorSmoke "${LOG_MIRROR}" \
-	"${OUT_DIR}/run-add-cookie-mirror-smoke.bat" || fail=1
-run_one --smoke-changed WebView2GtkAddCookieChangedSmoke "${LOG_CHANGED}" \
-	"${OUT_DIR}/run-add-cookie-changed-smoke.bat" || fail=1
-run_one --smoke-replace-startup WebView2GtkAddCookieReplaceStartupSmoke "${LOG_REPLACE}" \
-	"${OUT_DIR}/run-add-cookie-replace-startup-smoke.bat" 75 || fail=1
-run_one --smoke-persist WebView2GtkAddCookiePersistSmoke "${LOG_PERSIST}" \
-	"${OUT_DIR}/run-add-cookie-persist-smoke.bat" || fail=1
+if [[ "${1:-}" == "--smoke-proxy-direct" ]]; then
+	run_one --smoke-proxy-direct WebView2GtkAddCookieProxyDirectSmoke "${LOG_PROXY_DIRECT}" \
+		"${OUT_DIR}/run-add-cookie-proxy-direct-smoke.bat" 50 || fail=1
+elif [[ "${1:-}" == "--smoke-proxy" ]]; then
+	run_one --smoke-proxy WebView2GtkAddCookieProxySmoke "${LOG_PROXY}" \
+		"${OUT_DIR}/run-add-cookie-proxy-smoke.bat" || fail=1
+else
+	run_one --smoke WebView2GtkAddCookieSmoke "${LOG_ATTACH}" \
+		"${OUT_DIR}/run-add-cookie-smoke.bat" || fail=1
+	run_one --smoke-mirror WebView2GtkAddCookieMirrorSmoke "${LOG_MIRROR}" \
+		"${OUT_DIR}/run-add-cookie-mirror-smoke.bat" || fail=1
+	run_one --smoke-changed WebView2GtkAddCookieChangedSmoke "${LOG_CHANGED}" \
+		"${OUT_DIR}/run-add-cookie-changed-smoke.bat" || fail=1
+	run_one --smoke-replace-startup WebView2GtkAddCookieReplaceStartupSmoke "${LOG_REPLACE}" \
+		"${OUT_DIR}/run-add-cookie-replace-startup-smoke.bat" 75 || fail=1
+	run_one --smoke-persist WebView2GtkAddCookiePersistSmoke "${LOG_PERSIST}" \
+		"${OUT_DIR}/run-add-cookie-persist-smoke.bat" || fail=1
+	run_one --smoke-proxy-direct WebView2GtkAddCookieProxyDirectSmoke "${LOG_PROXY_DIRECT}" \
+		"${OUT_DIR}/run-add-cookie-proxy-direct-smoke.bat" 50 || fail=1
+	run_one --smoke-proxy WebView2GtkAddCookieProxySmoke "${LOG_PROXY}" \
+		"${OUT_DIR}/run-add-cookie-proxy-smoke.bat" || fail=1
+fi
 
 if [[ "${fail}" -eq 0 ]]; then
 	echo SMOKE_PASS

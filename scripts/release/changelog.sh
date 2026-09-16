@@ -9,10 +9,6 @@ die() {
 	exit 1
 }
 
-heading_date_is_iso() {
-	[[ "${1:-}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]
-}
-
 trim_section_body() {
 	awk '
 		{ lines[++n] = $0 }
@@ -116,10 +112,7 @@ cmd_version() {
 	rm -rf "$tmpdir"
 
 	if [[ "$title" == "Unreleased" ]]; then
-		die "CHANGELOG.md: set the first heading to ## [X.Y.Z] - Unreleased before releasing"
-	fi
-	if heading_date_is_iso "$date"; then
-		die "CHANGELOG.md: first section [${title}] is already dated ${date}; add a new ## [next] - Unreleased section first"
+		die "CHANGELOG.md: first heading must be ## [X.Y.Z] (date optional); do not use Unreleased"
 	fi
 	printf '%s\n' "$title"
 }
@@ -172,8 +165,7 @@ Usage:
   changelog.sh notes
   changelog.sh release-notes TAG [-o OUTPUT]
 
-Before tagging, set the first heading to:
-  ## [X.Y.Z] - Unreleased
+First heading is ## [X.Y.Z] or ## [X.Y.Z] - YYYY-MM-DD.
 EOF
 }
 

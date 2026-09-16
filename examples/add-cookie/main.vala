@@ -4,7 +4,8 @@
  *   --smoke-changed CookieManager.changed fires on add/replace (bug 2026-09-07)
  *   --smoke-replace-startup  large fire-and-forget replace at construct (bug 2026-09-09)
  *   --smoke-persist TEXT set_persistent_storage survives “restart” (bug 2026-09-09)
- *   --smoke-proxy   CUSTOM to TEST-NET closed hop → navigate fails closed (plan 6.0)
+ *   --smoke-proxy   CUSTOM to TEST-NET closed proxy → navigate fails closed (plan 6.0)
+ *   --smoke-proxy-direct  dummy local host proxy on, then example.com must FINISH (pass-through)
  *
  *   webview2gtk-add-cookie.exe [url]
  *   webview2gtk-add-cookie.exe --smoke
@@ -13,6 +14,7 @@
  *   webview2gtk-add-cookie.exe --smoke-replace-startup
  *   webview2gtk-add-cookie.exe --smoke-persist
  *   webview2gtk-add-cookie.exe --smoke-proxy
+ *   webview2gtk-add-cookie.exe --smoke-proxy-direct
  *
  * See docs/bugs/done/2026-08-25-add-cookie-before-attach.md
  *     docs/bugs/done/2026-09-07-cookie-manager-get-all-replace.md
@@ -38,6 +40,7 @@ private bool smoke_changed = false;
 private bool smoke_replace_startup = false;
 private bool smoke_persist = false;
 private bool smoke_proxy = false;
+private bool smoke_proxy_direct = false;
 private bool proxy_load_failed = false;
 private bool proxy_saw_example = false;
 private int smoke_status = 1;
@@ -406,8 +409,8 @@ private void finish_proxy(bool ok) {
 
 private void start_smoke_proxy() {
 	/*
-	 * Non-loopback dead hop (TEST-NET). 127.0.0.1 is the pass-through
-	 * sentinel — 192.0.2.1:1 must fail-closed if the hop chains CUSTOM.
+	 * Unreachable TEST-NET proxy. 127.0.0.1 is the pass-through
+	 * sentinel — 192.0.2.1:1 must fail-closed if CUSTOM is chained.
 	 */
 	web.network_session.set_proxy_settings(
 		NetworkProxyMode.CUSTOM,
@@ -432,6 +435,60 @@ private void start_smoke_proxy() {
 		if (title.down().contains("example domain")) {
 			proxy_saw_example = true;
 			finish_proxy(false);
+		}
+	});
+	web.load_uri("https://example.com/");
+}
+
+private void finish_proxy_direct(bool ok) {
+	if (smoke_done) {
+		return;
+	}
+	smoke_done = true;
+	print(
+		"smoke-proxy-direct load_failed=%s saw_example=%s\n",
+		proxy_load_failed ? "yes" : "no",
+		proxy_saw_example ? "yes" : "no"
+	);
+	if (ok) {
+		print("TEST_PASS\n");
+		smoke_status = 0;
+	} else {
+		print("TEST_FAIL (dummy local host proxy did not load Example Domain)\n");
+		smoke_status = 1;
+	}
+	if (window != null) {
+		window.close();
+	}
+}
+
+/**
+ * Consumer bootstrap: local host proxy already on via dummy CUSTOM. This
+ * view’s session is DEFAULT — no extra upstream. Pass = example.com paints.
+ */
+private void start_smoke_proxy_direct() {
+	print("smoke-proxy-direct load https://example.com/ (pass-through)\n");
+	web.load_failed.connect((load_event, failing_uri, error) => {
+		print("smoke-proxy-direct load_failed %s: %s\n", failing_uri, error.message);
+		if (failing_uri != null && failing_uri.down().has_prefix("about:")) {
+			return false;
+		}
+		proxy_load_failed = true;
+		Idle.add(() => {
+			finish_proxy_direct(false);
+			return Source.REMOVE;
+		});
+		return false;
+	});
+	web.load_changed.connect((load_event) => {
+		if (load_event != LoadEvent.FINISHED || smoke_done) {
+			return;
+		}
+		var title = web.get_title() ?? "";
+		print("smoke-proxy-direct FINISHED title=%s\n", title);
+		if (title.down().contains("example domain")) {
+			proxy_saw_example = true;
+			finish_proxy_direct(true);
 		}
 	});
 	web.load_uri("https://example.com/");
@@ -637,6 +694,10 @@ public static int main(string[] args) {
 			smoke_proxy = true;
 			continue;
 		}
+		if (args[i] == "--smoke-proxy-direct") {
+			smoke_proxy_direct = true;
+			continue;
+		}
 		if (args[i].has_prefix("-")) {
 			gtk_args += args[i];
 			continue;
@@ -650,9 +711,9 @@ public static int main(string[] args) {
 		window.set_title("webview2-gtk add-cookie");
 		window.set_default_size(800, 560);
 
-		if (smoke_proxy) {
-			var hop = new NetworkSession(null, null);
-			hop.set_proxy_settings(
+		if (smoke_proxy || smoke_proxy_direct) {
+			var session = new NetworkSession(null, null);
+			session.set_proxy_settings(
 				NetworkProxyMode.CUSTOM,
 				new NetworkProxySettings("http://127.0.0.1", null)
 			);
@@ -672,7 +733,7 @@ public static int main(string[] args) {
 			: (smoke_changed ? "changed…"
 			: (smoke_replace_startup ? "replace-startup…"
 			: (smoke_persist ? "persist…"
-			: (smoke_proxy ? "proxy…" : "injecting…")))));
+			: ((smoke_proxy || smoke_proxy_direct) ? "proxy…" : "injecting…")))));
 		status.set_wrap(true);
 		status.set_xalign(0);
 		status.set_selectable(true);
@@ -698,6 +759,9 @@ public static int main(string[] args) {
 			print("startup proxy before present %s\n", diag_line());
 			/* Must latch --proxy-server before first present/env create. */
 			start_smoke_proxy();
+		} else if (smoke_proxy_direct) {
+			print("startup proxy-direct before present %s\n", diag_line());
+			start_smoke_proxy_direct();
 		} else {
 			/* Inject on the same turn as first show — do not wait for ready/map. */
 			print("startup before present %s\n", diag_line());
@@ -708,8 +772,9 @@ public static int main(string[] args) {
 		refresh_status();
 
 		if (smoke || smoke_mirror || smoke_changed || smoke_replace_startup
-		    || smoke_persist || smoke_proxy) {
-			var timeout_ms = smoke_replace_startup ? 60000 : 12000;
+		    || smoke_persist || smoke_proxy || smoke_proxy_direct) {
+			var timeout_ms = smoke_replace_startup ? 60000
+				: (smoke_proxy_direct ? 20000 : 12000);
 			Timeout.add(timeout_ms, () => {
 				if (!smoke_done) {
 					if (smoke_mirror) {
@@ -728,6 +793,9 @@ public static int main(string[] args) {
 						/* Hung / no Example Domain ⇒ fail-closed ⇒ pass. */
 						print("smoke-proxy timeout (treat as fail-closed)\n");
 						finish_proxy(!proxy_saw_example);
+					} else if (smoke_proxy_direct) {
+						print("smoke-proxy-direct timeout\n");
+						finish_proxy_direct(false);
 					} else {
 						check_cookies_then_finish.begin();
 					}
@@ -738,6 +806,6 @@ public static int main(string[] args) {
 	});
 	app.run(gtk_args);
 	return (smoke || smoke_mirror || smoke_changed || smoke_replace_startup
-	    || smoke_persist || smoke_proxy)
+	    || smoke_persist || smoke_proxy || smoke_proxy_direct)
 		? smoke_status : 0;
 }

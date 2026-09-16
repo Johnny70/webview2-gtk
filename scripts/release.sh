@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Verify the tree is ready, then tag + push. GitHub Actions does the build.
 #
-# 1. Read latest ## [X.Y.Z] - Unreleased from CHANGELOG.md
+# 1. Read latest ## [X.Y.Z] from CHANGELOG.md
 # 2. Exit if tag vX.Y.Z already exists (local or origin)
 #    unless --retry: delete that tag locally and on origin, then continue
 # 3. Verify: clean tree, non-empty notes
