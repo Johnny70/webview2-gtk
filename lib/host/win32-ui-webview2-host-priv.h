@@ -21,6 +21,13 @@ struct WebView2Host {
 	wchar_t pending_url[2048];
 	BOOL use_client_bounds;
 	RECT bounds;
+	/* TRUE once `bounds` has actually reached a live controller via
+	 * put_Bounds -- lets set_bounds_xywh skip a redundant call when the
+	 * frame-tick-driven caller (every frame, forever, while attached) asks
+	 * for the same bounds again, without skipping the real first push that
+	 * has to happen once attach completes even if the requested bounds
+	 * happen to match whatever was cached from before attach. */
+	BOOL bounds_applied;
 	ICoreWebView2Controller *controller;
 	ICoreWebView2 *webview;
 	ICoreWebView2Environment *env;

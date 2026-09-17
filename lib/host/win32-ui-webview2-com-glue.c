@@ -430,10 +430,22 @@ vala_webview2_host_set_bounds_xywh (WebView2Host *host, int x, int y, int width,
 	bounds.top = y;
 	bounds.right = x + width;
 	bounds.bottom = y + height;
+	/* on_frame_tick (Vala side) calls this unconditionally every single
+	 * frame, forever, for as long as the view is attached -- without this
+	 * check, put_Bounds and present_webview both fire that often even when
+	 * nothing moved or resized. Confirmed root cause of a continuous
+	 * flicker report against a reading pane that shows one static message
+	 * with no resize happening at all. */
+	if (host->bounds_applied && host->bounds.left == bounds.left
+	    && host->bounds.top == bounds.top && host->bounds.right == bounds.right
+	    && host->bounds.bottom == bounds.bottom) {
+		return;
+	}
 	host->bounds = bounds;
 	host->use_client_bounds = FALSE;
 	if (host->controller != NULL) {
 		ICoreWebView2Controller_put_Bounds (host->controller, bounds);
+		host->bounds_applied = TRUE;
 		if (host->host_visible) {
 			vala_webview2_com_present_webview (host->parent);
 		}
