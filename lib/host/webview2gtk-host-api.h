@@ -237,6 +237,11 @@ bool vala_webview2_host_set_enable_back_forward_navigation_gestures (
 );
 bool vala_webview2_host_get_enable_back_forward_navigation_gestures (WebView2Host *host);
 
+/* Background color -- see win32-ui-webview2-background.c. */
+bool vala_webview2_host_set_background_color (
+	WebView2Host *host, uint8_t a, uint8_t r, uint8_t g, uint8_t b
+);
+
 /*
  * Decide callback: return non-zero if the app handled the request.
  * When handled, *allow_out is 1=allow / 0=deny.

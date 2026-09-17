@@ -97,6 +97,15 @@ struct WebView2Host {
 	 * (plan 2d) -- see win32-ui-webview2-settings.c. */
 	BOOL enable_back_forward_navigation_gestures;
 
+	/* Background color -- see win32-ui-webview2-background.c. Unset by
+	 * default (bg_color_set FALSE): WebView2's own opaque-white default is
+	 * left alone unless the app explicitly asks for something else. */
+	BOOL bg_color_set;
+	BYTE bg_a;
+	BYTE bg_r;
+	BYTE bg_g;
+	BYTE bg_b;
+
 	/* Chrome_WidgetWin_1 last matched to this controller (stable when parked). */
 	HWND a11y_hwnd;
 };

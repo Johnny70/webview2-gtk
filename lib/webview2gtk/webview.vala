@@ -76,6 +76,9 @@ extern bool wv2_host_get_is_muted(void* host);
 [CCode(cheader_filename = "webview2gtk-host-api.h", cname = "vala_webview2_host_set_enable_back_forward_navigation_gestures")]
 extern bool wv2_host_set_enable_back_forward_navigation_gestures(void* host, bool enabled);
 
+[CCode(cheader_filename = "webview2gtk-host-api.h", cname = "vala_webview2_host_set_background_color")]
+extern bool wv2_host_set_background_color(void* host, uint8 a, uint8 r, uint8 g, uint8 b);
+
 [CCode(cheader_filename = "webview2gtk-host-api.h", cname = "vala_webview2_host_set_permission_handler")]
 extern void wv2_host_set_permission_handler(void* host, void* decide, void* user_data);
 
@@ -166,6 +169,22 @@ public class WebView : Gtk.Box {
 				wv2_host_set_is_muted(host_handle, value);
 			}
 		}
+	}
+
+	/**
+	 * WebKitGTK-shaped — backed by the real ICoreWebView2Controller2.
+	 * DefaultBackgroundColor. Without this, a freshly created WebView2
+	 * shows its own opaque-white default until first paint -- visible as
+	 * a flash whenever the app recreates its WebView (there is no way to
+	 * change an existing one's color mid-life; call this before the view
+	 * is first attached to avoid the flash entirely).
+	 */
+	public void set_background_color(Gdk.RGBA color) {
+		uint8 a = (uint8) Math.lround(color.alpha.clamp(0.0f, 1.0f) * 255.0f);
+		uint8 r = (uint8) Math.lround(color.red.clamp(0.0f, 1.0f) * 255.0f);
+		uint8 g = (uint8) Math.lround(color.green.clamp(0.0f, 1.0f) * 255.0f);
+		uint8 b = (uint8) Math.lround(color.blue.clamp(0.0f, 1.0f) * 255.0f);
+		wv2_host_set_background_color(host_handle, a, r, g, b);
 	}
 
 	construct {

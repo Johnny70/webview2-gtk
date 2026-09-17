@@ -106,6 +106,9 @@ public void finish_setup(
 		return;
 	}
 	host_set_ready(host, true);
+	/* Before put_is_visible: a color set before attach must land before the
+	 * first frame ever paints, or the point of it (no flash) is moot. */
+	background_register(host);
 	var vis = com_controller_put_is_visible(host_controller_com(host), 1);
 	if (!com_ok(vis)) {
 		stderr.printf("WebView2 put_is_visible failed: 0x%08x\n", (uint) vis);
@@ -166,6 +169,9 @@ extern void permissions_register(void* host);
 
 [CCode(cheader_filename = "win32-ui-webview2-settings.h", cname = "vala_webview2_settings_register_host")]
 extern void settings_register(void* host);
+
+[CCode(cheader_filename = "win32-ui-webview2-background.h", cname = "vala_webview2_background_register_host")]
+extern void background_register(void* host);
 
 [CCode(cheader_filename = "win32-ui-webview2-a11y-diag.h", cname = "vala_webview2_a11y_diag_register")]
 extern void a11y_diag_register(ICoreWebView2 webview);

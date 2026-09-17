@@ -101,6 +101,8 @@ lib_depend_files = files(
   'lib/host/win32-ui-webview2-a11y-diag.c',
   'lib/host/win32-ui-webview2-settings.c',
   'lib/host/win32-ui-webview2-settings.h',
+  'lib/host/win32-ui-webview2-background.c',
+  'lib/host/win32-ui-webview2-background.h',
   'lib/host/webview2gtk-host-api.h',
   'generated/win32-ui-webview2-host-glue.vala',
   'generated/win32-ui-webview2-com-sync.vala',

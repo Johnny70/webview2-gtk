@@ -165,7 +165,8 @@ host_c_files() {
 		"${HOST}/win32-ui-webview2-permissions.c" \
 		"${HOST}/win32-ui-webview2-a11y.c" \
 		"${HOST}/win32-ui-webview2-a11y-diag.c" \
-		"${HOST}/win32-ui-webview2-settings.c"
+		"${HOST}/win32-ui-webview2-settings.c" \
+		"${HOST}/win32-ui-webview2-background.c"
 }
 
 inc_flags() {
