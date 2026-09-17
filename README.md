@@ -8,6 +8,25 @@ The widget takes the native HWND from `gdk_win32_surface_get_handle()` on the wi
 
 Build and link on **Windows**. Share Vala source with Linux via `#if WINDOWS` (WebKitGTK on Linux, this library on Windows).
 
+> **This is a fork of [roojs/webview2-gtk](https://github.com/roojs/webview2-gtk)**, maintained for
+> [WinPostcard](https://github.com/Johnny70/WinPostcard)'s Windows HTML-mail rendering. `origin` here is
+> this fork; `upstream` is the original. Changes on top of upstream, in [`8308773`](https://github.com/Johnny70/webview2-gtk/commit/8308773):
+>
+> - **GObject-Introspection**: upstream ships no GIR/typelib at all (Vala/C consumers only). This
+>   fork generates `WebView2Gtk-1.0.gir`/`.typelib` (`scripts/wv2gtk-build.sh`), so PyGObject can
+>   `from gi.repository import WebView2Gtk`.
+> - **Real navigation blocking**: upstream's own docs say `PolicyDecision.ignore()`/`.use()` are
+>   no-ops on Windows (only `PolicyDecisionType.RESPONSE` is observed). This fork wires
+>   `ICoreWebView2::NavigationStarting` through so `ignore()` actually cancels a navigation —
+>   the one thing untrusted HTML mail depends on. See `scripts/smoke-navigation-block.py` for the
+>   regression test.
+> - **More `WebViewSettings`**: added `enable_page_cache`, `enable_media`, `enable_webaudio`,
+>   `enable_webgl`, `enable_back_forward_navigation_gestures` (only the last has a real
+>   `ICoreWebView2Settings` equivalent; the rest are stored-only, since WebView2 exposes nothing
+>   for them).
+>
+> Not a general-purpose PR back to upstream (yet) — scoped to what UniPostcard needed.
+
 | Doc | |
 |-----|--|
 | [Changelog](CHANGELOG.md) | Notable changes per release |
