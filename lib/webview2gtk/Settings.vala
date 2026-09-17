@@ -25,6 +25,39 @@ public class WebViewSettings : Object {
 		set;
 		default = NavigatorWebDriverActivePolicy.AUTO;
 	}
+	/**
+	 * WebKitGTK-shaped — trackpad/touch swipe-to-go-back/forward.
+	 * Backed by the real ICoreWebView2Settings6.IsSwipeNavigationEnabled
+	 * (checked against the vendored WebView2.h; WebView2Gtk.WebView pushes
+	 * this to COM as soon as the host is attached, or immediately if it
+	 * already is).
+	 */
+	public bool enable_back_forward_navigation_gestures { get; set; default = false; }
+	/**
+	 * WebKitGTK-shaped — HTTP back/forward cache. No WebView2 equivalent is
+	 * exposed via ICoreWebView2Settings (checked across every …SettingsN
+	 * version in the vendored WebView2.h) -- stored only, no-op.
+	 */
+	public bool enable_page_cache { get; set; default = true; }
+	/**
+	 * WebKitGTK-shaped — coarse "allow media" toggle. No WebView2 equivalent
+	 * is exposed via ICoreWebView2Settings -- stored only, no-op.
+	 */
+	public bool enable_media { get; set; default = true; }
+	/**
+	 * WebKitGTK-shaped — Web Audio API. No WebView2 equivalent is exposed
+	 * via ICoreWebView2Settings -- stored only, no-op.
+	 */
+	public bool enable_webaudio { get; set; default = true; }
+	/**
+	 * WebKitGTK-shaped — WebGL. No WebView2 equivalent is exposed via
+	 * ICoreWebView2Settings -- Chromium's own --disable-webgl exists but
+	 * only as a process-wide flag at environment creation (like
+	 * navigator_webdriver_active_policy above), not a per-WebView COM
+	 * property, and no consumer of this fork needs that yet -- stored only,
+	 * no-op.
+	 */
+	public bool enable_webgl { get; set; default = true; }
 }
 
 /** WebKitGTK-shaped free function twin of Settings.set_navigator_webdriver_active_policy. */

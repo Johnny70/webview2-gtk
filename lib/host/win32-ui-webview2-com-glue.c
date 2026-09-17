@@ -622,6 +622,19 @@ vala_webview2_host_set_event_handlers (
 }
 
 void
+vala_webview2_host_set_navigation_decide_handler (
+	WebView2Host *host,
+	WebView2GtkNavigationDecideCb decide,
+	void *user_data)
+{
+	if (host == NULL) {
+		return;
+	}
+	host->cb_nav_decide = decide;
+	host->nav_decide_ctx = user_data;
+}
+
+void
 vala_webview2_com_release_host (WebView2Host *host)
 {
 	LONG left;

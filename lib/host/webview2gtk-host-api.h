@@ -230,6 +230,13 @@ void vala_webview2_host_set_media_flags (
 bool vala_webview2_host_set_is_muted (WebView2Host *host, bool muted);
 bool vala_webview2_host_get_is_muted (WebView2Host *host);
 
+/* WebViewSettings properties backed by a real COM Settings property (plan
+ * 2d) — see win32-ui-webview2-settings.c. */
+bool vala_webview2_host_set_enable_back_forward_navigation_gestures (
+	WebView2Host *host, bool enabled
+);
+bool vala_webview2_host_get_enable_back_forward_navigation_gestures (WebView2Host *host);
+
 /*
  * Decide callback: return non-zero if the app handled the request.
  * When handled, *allow_out is 1=allow / 0=deny.
@@ -243,6 +250,25 @@ typedef int (*WebView2GtkPermissionDecideCb) (
 void vala_webview2_host_set_permission_handler (
 	WebView2Host *host,
 	WebView2GtkPermissionDecideCb decide,
+	void *user_data
+);
+
+/*
+ * Decide callback for NavigationStarting: return non-zero if the app handled
+ * the decision. When handled, *cancel_out is 1=cancel the navigation, 0=allow
+ * it. uri_utf8 is only valid for the duration of the call. is_user_initiated
+ * is WebView2's own IsUserInitiated flag (true for e.g. a link click; false
+ * for a script/meta-refresh/redirect navigation).
+ */
+typedef int (*WebView2GtkNavigationDecideCb) (
+	const char *uri_utf8,
+	int is_user_initiated,
+	int *cancel_out,
+	void *user_data
+);
+void vala_webview2_host_set_navigation_decide_handler (
+	WebView2Host *host,
+	WebView2GtkNavigationDecideCb decide,
 	void *user_data
 );
 

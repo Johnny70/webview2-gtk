@@ -124,6 +124,7 @@ public void finish_setup(
 	downloads_register(host);
 	web_resources_register(host);
 	permissions_register(host);
+	settings_register(host);
 }
 
 [CCode(cname = "vala_webview2_host_destroy")]
@@ -162,6 +163,9 @@ extern void web_resources_register(void* host);
 
 [CCode(cheader_filename = "win32-ui-webview2-permissions.h", cname = "vala_webview2_permissions_register_host")]
 extern void permissions_register(void* host);
+
+[CCode(cheader_filename = "win32-ui-webview2-settings.h", cname = "vala_webview2_settings_register_host")]
+extern void settings_register(void* host);
 
 [CCode(cheader_filename = "win32-ui-webview2-a11y-diag.h", cname = "vala_webview2_a11y_diag_register")]
 extern void a11y_diag_register(ICoreWebView2 webview);

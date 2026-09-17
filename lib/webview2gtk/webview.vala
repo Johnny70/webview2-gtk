@@ -73,8 +73,14 @@ extern bool wv2_host_set_is_muted(void* host, bool muted);
 [CCode(cheader_filename = "webview2gtk-host-api.h", cname = "vala_webview2_host_get_is_muted")]
 extern bool wv2_host_get_is_muted(void* host);
 
+[CCode(cheader_filename = "webview2gtk-host-api.h", cname = "vala_webview2_host_set_enable_back_forward_navigation_gestures")]
+extern bool wv2_host_set_enable_back_forward_navigation_gestures(void* host, bool enabled);
+
 [CCode(cheader_filename = "webview2gtk-host-api.h", cname = "vala_webview2_host_set_permission_handler")]
 extern void wv2_host_set_permission_handler(void* host, void* decide, void* user_data);
+
+[CCode(cheader_filename = "webview2gtk-host-api.h", cname = "vala_webview2_host_set_navigation_decide_handler")]
+extern void wv2_host_set_navigation_decide_handler(void* host, void* decide, void* user_data);
 
 [CCode(cheader_filename = "webview2gtk-host-api.h", cname = "vala_webview2_host_set_event_handlers")]
 extern void wv2_host_set_event_handlers(
@@ -210,6 +216,7 @@ public class WebView : Gtk.Box {
 		this.capture_settings.notify.connect(on_settings_notify);
 		this.push_media_settings(false);
 		this.push_navigator_webdriver_policy(false);
+		this.push_swipe_navigation_setting();
 	}
 
 	public bool is_loading { get; private set; }
@@ -228,7 +235,11 @@ public class WebView : Gtk.Box {
 	public signal void load_changed(LoadEvent load_event);
 
 	/**
-	 * WebKitGTK-shaped — policy decision (main-frame document RESPONSE is wired today).
+	 * WebKitGTK-shaped — policy decision. NAVIGATION_ACTION (a
+	 * NavigationPolicyDecision) is emitted before every navigation and its
+	 * ignore()/use() are real; main-frame document RESPONSE
+	 * (ResponsePolicyDecision) is observe-only. NEW_WINDOW_ACTION is not
+	 * wired.
 	 */
 	public signal bool decide_policy(PolicyDecision decision, PolicyDecisionType type);
 
@@ -596,6 +607,7 @@ public class WebView : Gtk.Box {
 		this.network_session.bind_download_host(host_handle);
 		wv2_host_set_event_handlers(host_handle, (void*) on_navigation_starting_cb,
 			(void*) on_navigation_completed_cb, (void*) on_document_title_changed_cb, this);
+		wv2_host_set_navigation_decide_handler(host_handle, (void*) on_navigation_decide_cb, this);
 		this.sync_host_visible();
 		try_navigate();
 	}
@@ -700,7 +712,15 @@ public class WebView : Gtk.Box {
 		case "navigator-webdriver-active-policy":
 			this.push_navigator_webdriver_policy(true);
 			break;
+		case "enable-back-forward-navigation-gestures":
+			this.push_swipe_navigation_setting();
+			break;
 		}
+	}
+
+	private void push_swipe_navigation_setting() {
+		wv2_host_set_enable_back_forward_navigation_gestures(
+			host_handle, this.capture_settings.enable_back_forward_navigation_gestures);
 	}
 
 	private void push_navigator_webdriver_policy(bool from_prop) {
@@ -743,6 +763,32 @@ public class WebView : Gtk.Box {
 			return 1;
 		}
 		return 0;
+	}
+
+	/* Answered synchronously: by the time this returns, *cancel_out must
+	 * already reflect whatever the app's decide_policy handler decided --
+	 * see win32-ui-webview2-events.c's event_handler1_invoke, which applies
+	 * it to the real WebView2 NavigationStartingEventArgs before this call
+	 * unwinds. is_user_initiated (WebView2's own flag) is the closest
+	 * equivalent WebView2 has to WebKit's NavigationType: true for e.g. a
+	 * link click, false for a script/meta-refresh/redirect navigation. */
+	[CCode(has_target = false)]
+	private static int on_navigation_decide_cb(
+		string uri,
+		int is_user_initiated,
+		int* cancel_out,
+		void* user_data
+	) {
+		var view = (WebView) user_data;
+		var navigation_type = is_user_initiated != 0
+			? NavigationType.LINK_CLICKED
+			: NavigationType.OTHER;
+		var decision = new NavigationPolicyDecision(new NavigationAction(uri, navigation_type));
+		view.decide_policy(decision, PolicyDecisionType.NAVIGATION_ACTION);
+		if (cancel_out != null) {
+			*cancel_out = decision.is_ignored() ? 1 : 0;
+		}
+		return 1;
 	}
 
 	[CCode(has_target = false)]

@@ -39,6 +39,10 @@ struct WebView2Host {
 	WebView2GtkEventCb cb_title_changed;
 	void *event_user_data;
 
+	/* NavigationStarting decision (security-relevant: can cancel a load) */
+	WebView2GtkNavigationDecideCb cb_nav_decide;
+	void *nav_decide_ctx;
+
 	/* Document response (main-frame HTTP) */
 	BOOL doc_response_registered;
 	EventRegistrationToken tok_doc_nav;
@@ -88,6 +92,10 @@ struct WebView2Host {
 	/* Apply queued cookies before first Navigate (add_cookie-before-attach). */
 	WebView2GtkCookieApplyCb cb_cookie_apply;
 	void *cookie_apply_ctx;
+
+	/* WebViewSettings properties backed by a real COM Settings property
+	 * (plan 2d) -- see win32-ui-webview2-settings.c. */
+	BOOL enable_back_forward_navigation_gestures;
 
 	/* Chrome_WidgetWin_1 last matched to this controller (stable when parked). */
 	HWND a11y_hwnd;

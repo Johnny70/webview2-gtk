@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 
+#include "win32-ui-webview2-com-glue.h"
 #include "win32-ui-webview2-events.h"
 #include "win32-ui-webview2-host-priv.h"
 #include "win32-ui-webview2-proxy.h"
@@ -127,6 +128,11 @@ static ULONG STDMETHODCALLTYPE event_handler1_release (
 	return (ULONG) count;
 }
 
+/* Security-relevant: this is the only point that can stop a navigation
+ * before it happens (a message body's own decide-policy handler relies on
+ * this to block anything but a user-clicked link). Answered synchronously,
+ * inside this call, before returning to WebView2 -- no GetDeferral, since
+ * the app's decide_policy handler is itself synchronous. */
 static HRESULT STDMETHODCALLTYPE event_handler1_invoke (
 	ICoreWebView2NavigationStartingEventHandler *This,
 	ICoreWebView2 *sender,
@@ -136,7 +142,27 @@ static HRESULT STDMETHODCALLTYPE event_handler1_invoke (
 	WebView2Host *host = self->host;
 
 	(void) sender;
-	(void) args;
+	if (host != NULL && args != NULL && host->cb_nav_decide != NULL) {
+		LPWSTR uri = NULL;
+		BOOL is_user_initiated = FALSE;
+		if (SUCCEEDED (ICoreWebView2NavigationStartingEventArgs_get_Uri (args, &uri)) && uri != NULL) {
+			/* wide_length1 is an element count (Vala uint16[] length), not a
+			 * WideCharToMultiByte-style "-1 means null-terminated" sentinel --
+			 * passing -1 would make the conversion return an empty string. */
+			char *uri_utf8 = win32_ui_utf16_to_utf8 ((uint16_t *) uri, (int) wcslen (uri) + 1);
+			ICoreWebView2NavigationStartingEventArgs_get_IsUserInitiated (args, &is_user_initiated);
+			if (uri_utf8 != NULL) {
+				int cancel = 0;
+				if (host->cb_nav_decide (
+					    uri_utf8, is_user_initiated ? 1 : 0, &cancel, host->nav_decide_ctx)
+				    && cancel) {
+					ICoreWebView2NavigationStartingEventArgs_put_Cancel (args, TRUE);
+				}
+				free (uri_utf8);
+			}
+			CoTaskMemFree (uri);
+		}
+	}
 	if (host != NULL && host->cb_nav_starting != NULL) {
 		host->cb_nav_starting (host->event_user_data);
 	}

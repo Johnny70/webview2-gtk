@@ -78,6 +78,8 @@ CAPTURE_VALA=(
 	lib/webview2gtk/CookieManagerExt.vala
 	lib/webview2gtk/URIRequest.vala
 	lib/webview2gtk/PolicyDecision.vala
+	lib/webview2gtk/NavigationAction.vala
+	lib/webview2gtk/NavigationPolicyDecision.vala
 	lib/webview2gtk/URIResponse.vala
 	lib/webview2gtk/ResponsePolicyDecision.vala
 	lib/webview2gtk/WebResource.vala
@@ -162,7 +164,8 @@ host_c_files() {
 		"${HOST}/win32-ui-webview2-web-resources.c" \
 		"${HOST}/win32-ui-webview2-permissions.c" \
 		"${HOST}/win32-ui-webview2-a11y.c" \
-		"${HOST}/win32-ui-webview2-a11y-diag.c"
+		"${HOST}/win32-ui-webview2-a11y-diag.c" \
+		"${HOST}/win32-ui-webview2-settings.c"
 }
 
 inc_flags() {
@@ -208,7 +211,8 @@ case "${MODE}" in
 		HOST_DIR="${BUILD_DIR}/host"
 		GTK_DIR="${BUILD_DIR}/gtk-lib"
 		OBJ_DIR="${BUILD_DIR}/obj"
-		mkdir -p "${PREFIX}/lib" "${PREFIX}/include/webview2gtk-1" "${PREFIX}/lib/pkgconfig"
+		mkdir -p "${PREFIX}/lib" "${PREFIX}/bin" "${PREFIX}/include/webview2gtk-1" \
+				"${PREFIX}/lib/pkgconfig" "${PREFIX}/share/gir-1.0" "${PREFIX}/lib/girepository-1.0"
 		compile_host_c "${HOST_DIR}"
 		mkdir -p "${GTK_DIR}/lib/webview2gtk"
 		(
@@ -240,6 +244,49 @@ case "${MODE}" in
 		done
 		shopt -u nullglob
 		ar rcs "${PREFIX}/lib/libwebview2gtk-1.a" "${OBJ_DIR}"/*.o
+		# GIR needs its own pass: it fails outright if any of the compiled
+		# sources declare a second top-level namespace (Win32Atspi does, for
+		# accessibility) -- so this list is CAPTURE_VALA minus those two files.
+		GIR_DIR="${BUILD_DIR}/gtk-lib-gir"
+		rm -rf "${GIR_DIR}"
+		mkdir -p "${GIR_DIR}"
+		# GIR only needs the public API surface, not real accessibility
+		# wiring -- strip the two Win32Atspi call sites from a copy of
+		# webview.vala instead of pulling in that namespace (which would
+		# re-trigger valac's "secondary top-level namespace" GIR error).
+		GIR_WEBVIEW_VALA="${GIR_DIR}/webview-gir.vala"
+		sed -e 's/Win32Atspi\.register_webview(this);/\/* stripped for GIR pass *\//' \
+			-e 's/Win32Atspi\.Bridge\.unregister(this);/\/* stripped for GIR pass *\//' \
+			"${ROOT}/lib/webview2gtk/webview.vala" > "${GIR_WEBVIEW_VALA}"
+		if ! grep -q '/\* stripped for GIR pass \*/' "${GIR_WEBVIEW_VALA}"; then
+			echo "wv2gtk-build: expected Win32Atspi call sites not found in webview.vala (GIR strip)" >&2
+			exit 1
+		fi
+		# shellcheck disable=SC2046
+		(
+			cd "${ROOT}"
+			valac "${GTK_VALA_ARGS[@]}" --vapidir "${VAPI}" \
+				-C --library=webview2gtk-1 --gir=WebView2Gtk-1.0.gir \
+				-d "${GIR_DIR}" \
+				"${GIR_WEBVIEW_VALA}" \
+				$(printf '%s\n' "${CAPTURE_VALA[@]}" | grep -v /win32atspi/)
+		)
+		GIR_FILE="${GIR_DIR}/WebView2Gtk-1.0.gir"
+		if [[ ! -f "${GIR_FILE}" ]]; then
+			echo "wv2gtk-build: ${GIR_FILE} not generated (valac --gir)" >&2
+			exit 1
+		fi
+		# Shared library + typelib: the static .a above is what the example
+		# exes link (upstream's only consumer); a GObject-Introspection
+		# consumer (Python via PyGObject) needs an actual .dll to dlopen at
+		# runtime instead, since a typelib stores metadata, not code.
+		# shellcheck disable=SC2086
+		${CC} -shared -o "${PREFIX}/bin/libwebview2gtk-1-0.dll" "${OBJ_DIR}"/*.o \
+			-Wl,--out-implib,"${PREFIX}/lib/libwebview2gtk-1.dll.a" \
+			${GTK_LIBS} "${WEBVIEW2_LINK[@]}"
+		cp -f "${GIR_FILE}" "${PREFIX}/share/gir-1.0/"
+		g-ir-compiler --shared-library=libwebview2gtk-1-0.dll \
+			-o "${PREFIX}/lib/girepository-1.0/WebView2Gtk-1.0.typelib" "${GIR_FILE}"
 		cp -f "${VAPI}/webview2gtk-1.vapi" "${PREFIX}/lib/webview2gtk-1.vapi"
 		printf '%s\n' 'gtk4' 'libsoup-3.0' 'gee-0.8' > "${PREFIX}/lib/webview2gtk-1.deps"
 		cp -f "${VAPI}/webview2gtk-cookie-ext.vapi" "${PREFIX}/lib/webview2gtk-cookie-ext.vapi"
@@ -249,6 +296,7 @@ case "${MODE}" in
 		cp -f "${HOST}/webview2gtk-host-api.h" "${PREFIX}/include/webview2gtk-1/"
 		sed -e "s|@prefix@|${PREFIX}|g" -e "s|@version@|${VERSION}|g" "${ROOT}/webview2gtk-1.pc.in" > "${PREFIX}/lib/pkgconfig/webview2gtk-1.pc"
 		cp -f "${ROOT}/build/vendor/webview2/x64/WebView2Loader.dll" "${PREFIX}/lib/" 2>/dev/null || true
+		cp -f "${ROOT}/build/vendor/webview2/x64/WebView2Loader.dll" "${PREFIX}/bin/" 2>/dev/null || true
 		# Meson custom_target output — without this, `meson install` rebuilds lib every time.
 		mkdir -p "$(dirname "${STAMP}")"
 		touch "${STAMP}"

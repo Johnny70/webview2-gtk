@@ -55,6 +55,22 @@ public enum NavigatorWebDriverActivePolicy {
 	DISABLED
 }
 
+/**
+ * WebKitGTK-shaped -- LINK_CLICKED maps from WebView2's own IsUserInitiated
+ * navigation-starting flag. Every other navigation (redirect, form
+ * auto-submit, script navigation, reload) comes through as OTHER, since
+ * WebView2's NavigationStarting event does not distinguish them the way
+ * WebKit's engine does.
+ */
+public enum NavigationType {
+	LINK_CLICKED,
+	FORM_SUBMITTED,
+	BACK_FORWARD,
+	RELOAD,
+	FORM_RESUBMITTED,
+	OTHER
+}
+
 /** WebKitGTK-shaped subset — used by {@link WebView.load_failed}. */
 public errordomain NetworkError {
 	FAILED,
